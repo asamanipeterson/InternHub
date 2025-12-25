@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Briefcase, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export const HeroSection = () => {
   return (
@@ -72,13 +73,17 @@ export const HeroSection = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button variant="hero" size="xl">
-                Browse Internships
-                <ArrowRight className="ml-2" />
-              </Button>
-              <Button variant="hero-outline" size="xl">
-                Book Counselling
-              </Button>
+              <Link to="/internships">
+                <Button variant="hero" size="xl">
+                  Browse Internships
+                  <ArrowRight className="ml-2" />
+                </Button>
+              </Link>
+              <Link to="/counselling">
+                <Button variant="hero-outline" size="xl">
+                  Book Counselling
+                </Button>
+              </Link>
             </div>
 
             {/* Stats */}

@@ -3,17 +3,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 
 const navLinks = [
   { label: "Home", href: "/" },
   { label: "Internships", href: "/internships" },
-  { label: "Counselling", href: "/#counselling" },
-  { label: "About", href: "/#about" },
+  { label: "Counselling", href: "/counselling" },
+  { label: "About", href: "/about" },
 ];
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  const isActive = (href: string) => {
+    if (href === "/") return location.pathname === "/";
+    return location.pathname === href;
+  };
 
   return (
     <motion.nav
@@ -30,12 +37,17 @@ export const Navbar = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-2">
             {navLinks.map((link) => (
               <Link
                 key={link.label}
                 to={link.href}
-                className="text-foreground/80 hover:text-foreground font-medium link-underline transition-colors duration-200"
+                className={cn(
+                  "px-4 py-2 rounded-lg font-medium transition-all duration-300",
+                  isActive(link.href)
+                    ? "bg-accent text-accent-foreground"
+                    : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+                )}
               >
                 {link.label}
               </Link>
@@ -76,7 +88,7 @@ export const Navbar = () => {
             transition={{ duration: 0.3 }}
             className="lg:hidden glass border-t border-border"
           >
-            <div className="container mx-auto px-4 py-4 space-y-4">
+            <div className="container mx-auto px-4 py-4 space-y-2">
               {navLinks.map((link, index) => (
                 <motion.div
                   key={link.label}
@@ -86,7 +98,12 @@ export const Navbar = () => {
                 >
                   <Link
                     to={link.href}
-                    className="block text-foreground/80 hover:text-foreground font-medium py-2"
+                    className={cn(
+                      "block font-medium py-2 px-4 rounded-lg transition-all duration-300",
+                      isActive(link.href)
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+                    )}
                     onClick={() => setIsOpen(false)}
                   >
                     {link.label}
