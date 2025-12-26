@@ -9,7 +9,7 @@ import logo from "@/assets/logo.png";
 const navLinks = [
   { label: "Home", href: "/" },
   { label: "Internships", href: "/internships" },
-  { label: "Counselling", href: "/counselling" },
+  { label: "Mentorship", href: "/mentorship" },
   { label: "About", href: "/about" },
 ];
 
