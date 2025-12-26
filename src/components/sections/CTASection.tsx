@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export const CTASection = () => {
   return (
@@ -63,13 +64,17 @@ export const CTASection = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button variant="hero" size="xl" className="animate-pulse-glow">
-              Get Started Free
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </Button>
-            <Button variant="hero-outline" size="xl">
-              Talk to an Expert
-            </Button>
+            <Link to="/internships">
+              <Button variant="hero" size="xl" className="animate-pulse-glow">
+                Explore Internships
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+            </Link>
+            <Link to="/mentorship">
+              <Button variant="hero-outline" size="xl">
+                Book a Session
+              </Button>
+            </Link>
           </div>
 
           {/* Trust badges */}
@@ -90,7 +95,7 @@ export const CTASection = () => {
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
-              <span className="text-sm">Free counselling session</span>
+              <span className="text-sm">Free mentorship session</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
