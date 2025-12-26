@@ -66,10 +66,10 @@ export const HeroSection = () => {
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground leading-tight mb-6">
               Connect with{" "}
-              <span className="relative">
+              <span className="relative inline-block">
                 <span className="text-accent">Industry Leaders</span>
                 <motion.span
-                  className="absolute -bottom-2 left-0 w-full h-1 bg-accent rounded-full"
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
                   initial={{ scaleX: 0 }}
                   animate={{ scaleX: 1 }}
                   transition={{ duration: 0.8, delay: 1 }}
