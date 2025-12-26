@@ -4,22 +4,22 @@ import logo from "@/assets/logo.png";
 
 const footerLinks = {
   platform: [
-    { label: "Internships", href: "#internships" },
-    { label: "Counselling", href: "#counselling" },
-    { label: "Companies", href: "#" },
-    { label: "Students", href: "#" },
+    { label: "Internships", href: "/internships" },
+    { label: "Mentorship", href: "/mentorship" },
+    { label: "Companies", href: "/companies" },
+    { label: "Students", href: "/students" },
   ],
   resources: [
-    { label: "Blog", href: "#" },
-    { label: "Career Tips", href: "#" },
-    { label: "Resume Builder", href: "#" },
-    { label: "Interview Prep", href: "#" },
+    { label: "Blog", href: "/blog" },
+    { label: "Career Tips", href: "/career-tips" },
+    { label: "Resume Builder", href: "/resume-builder" },
+    { label: "Interview Prep", href: "/interview-prep" },
   ],
   company: [
-    { label: "About Us", href: "#about" },
-    { label: "Contact", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Partner With Us", href: "#" },
+    { label: "About Us", href: "/about" },
+    { label: "Contact", href: "/contact" },
+    { label: "Careers", href: "/careers" },
+    { label: "Partner With Us", href: "/partner-with-us" },
   ],
 };
 

@@ -11,6 +11,7 @@ const navLinks = [
   { label: "Internships", href: "/internships" },
   { label: "Mentorship", href: "/mentorship" },
   { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
 ];
 
 export const Navbar = () => {
