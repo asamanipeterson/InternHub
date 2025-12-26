@@ -101,7 +101,16 @@ const Internships = () => {
               transition={{ delay: 0.2, duration: 0.6 }}
               className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground mb-4"
             >
-              Explore <span className="text-accent">Internships</span>
+              Explore{" "}
+              <span className="relative inline-block">
+                <span className="text-accent">Internships</span>
+                <motion.span
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.8, delay: 0.8 }}
+                />
+              </span>
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 20 }}

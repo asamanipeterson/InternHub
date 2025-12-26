@@ -75,8 +75,25 @@ const About = () => {
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-6">
               Bridging the Gap Between{" "}
-              <span className="text-accent">Students</span> and{" "}
-              <span className="text-accent">Industry</span>
+              <span className="relative inline-block">
+                <span className="text-accent">Students</span>
+                <motion.span
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.8, delay: 0.8 }}
+                />
+              </span>{" "}
+              and{" "}
+              <span className="relative inline-block">
+                <span className="text-accent">Industry</span>
+                <motion.span
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.8, delay: 1.2 }}
+                />
+              </span>
             </h1>
             
             <p className="text-lg lg:text-xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
