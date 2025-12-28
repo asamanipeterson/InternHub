@@ -1,8 +1,34 @@
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { useEffect, useRef } from "react";
 import { ArrowRight, Briefcase, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.jpg";
+
+// This replaces the missing useCountUp hook while maintaining your exact design
+const CountUpStat = ({ end, suffix, label }: { end: number; suffix: string; label: string }) => {
+  const countValue = useMotionValue(0);
+  const rounded = useTransform(countValue, (latest) => Math.round(latest).toLocaleString());
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const controls = animate(countValue, end, {
+      duration: 2.5, // Matches your 2500ms duration
+      ease: "easeOut",
+      delay: 1, // Delays start to match the stats entrance animation
+    });
+    return controls.stop;
+  }, [countValue, end]);
+
+  return (
+    <div ref={ref} className="text-center lg:text-left">
+      <div className="text-3xl lg:text-4xl font-bold text-accent">
+        <motion.span>{rounded}</motion.span>{suffix}
+      </div>
+      <div className="text-primary-foreground/70 text-sm">{label}</div>
+    </div>
+  );
+};
 
 export const HeroSection = () => {
   return (
@@ -104,16 +130,9 @@ export const HeroSection = () => {
               transition={{ duration: 0.6, delay: 0.8 }}
               className="flex flex-wrap justify-center lg:justify-start gap-8 mt-12 pt-8 border-t border-primary-foreground/20"
             >
-              {[
-                { value: "500+", label: "Internships" },
-                { value: "50+", label: "Companies" },
-                { value: "10K+", label: "Students Placed" },
-              ].map((stat, index) => (
-                <div key={index} className="text-center lg:text-left">
-                  <div className="text-3xl lg:text-4xl font-bold text-accent">{stat.value}</div>
-                  <div className="text-primary-foreground/70 text-sm">{stat.label}</div>
-                </div>
-              ))}
+              <CountUpStat end={500} suffix="+" label="Internships" />
+              <CountUpStat end={50} suffix="+" label="Companies" />
+              <CountUpStat end={10000} suffix="+" label="Students Placed" />
             </motion.div>
           </motion.div>
 

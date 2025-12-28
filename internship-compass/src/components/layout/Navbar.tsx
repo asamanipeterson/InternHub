@@ -108,7 +108,7 @@ export const Navbar = () => {
                 <Link to="/dashboard">
                   <Button variant="nav-cta" size="default">
                     <Shield className="w-4 h-4 mr-2" />
-                    Admin
+                    Dashboard
                   </Button>
                 </Link>
 
@@ -171,7 +171,7 @@ export const Navbar = () => {
                     <Link to="/dashboard" onClick={() => setIsOpen(false)}>
                       <Button variant="outline" className="w-full">
                         <Shield className="w-4 h-4 mr-2" />
-                        Admin Dashboard
+                        Dashboard 
                       </Button>
                     </Link>
                     <Button variant="destructive" className="w-full" onClick={handleLogout}>
