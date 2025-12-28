@@ -1,8 +1,10 @@
+// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import Index from "./pages/Index";
 import Internships from "./pages/Internships";
 import Mentorship from "./pages/Mentorship";
@@ -18,6 +20,8 @@ import InterviewPrep from "./pages/InterviewPrep";
 import Careers from "./pages/Careers";
 import PartnerWithUs from "./pages/PartnerWithUs";
 import NotFound from "./pages/NotFound";
+import Auth from "./pages/Auth";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -26,13 +30,14 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+
       <BrowserRouter>
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Index />} />
           <Route path="/internships" element={<Internships />} />
           <Route path="/mentorship" element={<Mentorship />} />
           <Route path="/about" element={<About />} />
-          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/companies" element={<Companies />} />
           <Route path="/students" element={<Students />} />
@@ -42,7 +47,17 @@ const App = () => (
           <Route path="/interview-prep" element={<InterviewPrep />} />
           <Route path="/careers" element={<Careers />} />
           <Route path="/partner-with-us" element={<PartnerWithUs />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
+          {/* Auth Page */}
+          <Route path="/auth" element={<Auth />} />
+
+          {/* Protected Admin Dashboard */}
+          {/* Only logged-in admins can access /dashboard */}
+          <Route element={<ProtectedRoute adminOnly={true} />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Route>
+
+          {/* Catch-all 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
