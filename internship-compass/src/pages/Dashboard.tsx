@@ -1,8 +1,9 @@
-import { useState } from "react";
+'use client';
+
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { useBookingStore, Company, Counselor } from "@/stores/bookingStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,13 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Building,
@@ -31,7 +39,65 @@ import {
   BookOpen,
   BarChart3,
   UserCircle,
+  Upload,
+  ImageIcon,
+  User,
+  CheckCircle,
+  XCircle,
+  FileText,
+  Clock,
+  Download,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import api from "@/lib/api";
+
+interface Company {
+  id: string;
+  name: string;
+  logo: string | null;
+  industry: string;
+  description: string | null;
+  location: string | null;
+  total_slots: number;
+  available_slots: number;
+}
+
+interface Mentor {
+  id: string;
+  name: string;
+  title: string;
+  specialization: string | null;
+  bio: string | null;
+  image: string | null;
+  experience: number;
+  rating: number;
+}
+
+interface Booking {
+  id: string;
+  company: { id: string; name: string };
+  student_name: string;
+  student_email: string;
+  student_phone: string;
+  student_id: string;
+  university: string;
+  cv_path: string;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'expired';
+  created_at: string;
+  expires_at?: string | null;
+}
+
+const ITEMS_PER_PAGE = 10;
+
+const INDUSTRIES = [
+  "Technology", "Finance", "Energy", "HealthCare", "Arts & Design", "Education", "Manufacturing",
+  "Telecommunications", "Real Estate", "Agriculture", "Retail & E-commerce", "Transportation",
+  "Legal Services", "Marketing & Media", "Hospitality & Tourism", "Construction", "Media & Entertainment",
+  "Insurance", "Pharmaceuticals", "Automotive", "Aerospace", "Defense", "Environmental Services",
+  "Non-Profit & NGO", "Government & Public Sector", "Consulting", "Human Resources", "Logistics & Supply Chain",
+  "Fashion & Apparel", "Food & Beverage", "Sports & Fitness", "Gaming", "Biotechnology", "Renewable Energy",
+  "Cybersecurity", "Artificial Intelligence", "Data Science & Analytics", "Cloud Computing", "Blockchain & Crypto"
+];
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -47,138 +113,364 @@ const itemVariants = {
 };
 
 const Dashboard = () => {
-  const {
-    companies,
-    bookings,
-    counselors,
-    addCompany,
-    updateCompany,
-    deleteCompany,
-    addCounselor,
-    updateCounselor,
-    deleteCounselor,
-  } = useBookingStore();
+  const navigate = useNavigate();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [mentors, setMentors] = useState<Mentor[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Company dialog states
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
-  const [counselorDialogOpen, setCounselorDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [editingCounselor, setEditingCounselor] = useState<Counselor | null>(null);
-
+  const [companyFile, setCompanyFile] = useState<File | null>(null);
+  const [companyPreview, setCompanyPreview] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState({
     name: "",
-    logo: "🏢",
     industry: "",
     description: "",
     location: "",
-    totalSlots: 5,
-    availableSlots: 5,
+    total_slots: 5,
+    available_slots: 5,
   });
 
-  const [counselorForm, setCounselorForm] = useState({
+  // Mentor dialog states
+  const [mentorDialogOpen, setMentorDialogOpen] = useState(false);
+  const [editingMentor, setEditingMentor] = useState<Mentor | null>(null);
+  const [mentorFile, setMentorFile] = useState<File | null>(null);
+  const [mentorPreview, setMentorPreview] = useState<string | null>(null);
+  const [mentorForm, setMentorForm] = useState({
     name: "",
     title: "",
     specialization: "",
     bio: "",
-    image: "👨‍💼",
     experience: 5,
     rating: 4.5,
   });
 
-  const totalSlots = companies.reduce((acc, c) => acc + c.totalSlots, 0);
-  const bookedSlots = bookings.length;
+  // CV Modal states
+  const [cvModalOpen, setCvModalOpen] = useState(false);
+  const [currentCvPath, setCurrentCvPath] = useState<string | null>(null);
+  const [currentStudentName, setCurrentStudentName] = useState<string>("");
+  const [currentCompanyName, setCurrentCompanyName] = useState<string>("");
 
-  const handleSaveCompany = () => {
+  const getCvUrl = (path: string) => {
+    return `${api.defaults.baseURL}/storage/${path}`;
+  };
+
+  const [visibleCompanies, setVisibleCompanies] = useState(ITEMS_PER_PAGE);
+  const [visibleMentors, setVisibleMentors] = useState(ITEMS_PER_PAGE);
+
+  const companyFileInputRef = useRef<HTMLInputElement>(null);
+  const mentorFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [companiesRes, mentorsRes] = await Promise.all([
+          api.get("/api/companies"),
+          api.get("/api/mentors"),
+        ]);
+        setCompanies(companiesRes.data);
+        setMentors(mentorsRes.data);
+
+        try {
+          const bookingsRes = await api.get("/api/admin/bookings");
+          setBookings(bookingsRes.data);
+        } catch (bookingErr) {
+          console.error("Failed to load bookings:", bookingErr);
+          setBookings([]);
+        }
+      } catch (err: any) {
+        toast.error("Failed to load dashboard data");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleCompanyImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCompanyFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCompanyPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleMentorImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setMentorFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMentorPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const totalSlots = companies.reduce((acc, c) => acc + c.total_slots, 0);
+  const availableSlotsTotal = companies.reduce((acc, c) => acc + c.available_slots, 0);
+  const bookedSlots = totalSlots - availableSlotsTotal;
+  const pendingBookings = bookings.filter(b => b.status === 'pending').length;
+
+  const refreshData = async () => {
+    try {
+      const [companiesRes, mentorsRes] = await Promise.all([
+        api.get("/api/companies"),
+        api.get("/api/mentors"),
+      ]);
+      setCompanies(companiesRes.data);
+      setMentors(mentorsRes.data);
+      try {
+        const bookingsRes = await api.get("/api/admin/bookings");
+        setBookings(bookingsRes.data);
+      } catch (err) {
+        setBookings([]);
+      }
+      setVisibleCompanies(ITEMS_PER_PAGE);
+      setVisibleMentors(ITEMS_PER_PAGE);
+    } catch (err) {
+      toast.error("Failed to refresh data");
+    }
+  };
+
+  const handleSaveCompany = async () => {
     if (!companyForm.name || !companyForm.industry) {
       toast.error("Please fill in required fields");
       return;
     }
+    const formData = new FormData();
+    formData.append("name", companyForm.name);
+    formData.append("industry", companyForm.industry);
+    formData.append("description", companyForm.description || "");
+    formData.append("location", companyForm.location || "");
+    formData.append("total_slots", companyForm.total_slots.toString());
+    formData.append("available_slots", companyForm.available_slots.toString());
+    if (companyFile) formData.append("logo", companyFile);
 
-    if (editingCompany) {
-      updateCompany(editingCompany.id, companyForm);
-      toast.success("Company updated successfully");
-    } else {
-      addCompany(companyForm);
-      toast.success("Company added successfully");
+    try {
+      if (editingCompany) {
+        await api.put(`/api/companies/${editingCompany.id}`, formData);
+        toast.success("Company updated successfully");
+      } else {
+        await api.post("/api/companies", formData);
+        toast.success("Company added successfully");
+      }
+      setCompanyDialogOpen(false);
+      setEditingCompany(null);
+      setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 });
+      setCompanyFile(null);
+      setCompanyPreview(null);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error saving company");
     }
-
-    setCompanyDialogOpen(false);
-    setEditingCompany(null);
-    setCompanyForm({
-      name: "",
-      logo: "🏢",
-      industry: "",
-      description: "",
-      location: "",
-      totalSlots: 5,
-      availableSlots: 5,
-    });
   };
 
   const handleEditCompany = (company: Company) => {
     setEditingCompany(company);
-    setCompanyForm(company);
+    setCompanyForm({
+      name: company.name,
+      industry: company.industry,
+      description: company.description || "",
+      location: company.location || "",
+      total_slots: company.total_slots,
+      available_slots: company.available_slots,
+    });
+    setCompanyPreview(company.logo ? `/${company.logo}` : null);
+    setCompanyFile(null);
     setCompanyDialogOpen(true);
   };
 
-  const handleDeleteCompany = (id: string) => {
-    if (confirm("Are you sure you want to delete this company?")) {
-      deleteCompany(id);
+  const handleDeleteCompany = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this company?")) return;
+    try {
+      await api.delete(`/api/companies/${id}`);
       toast.success("Company deleted successfully");
+      await refreshData();
+    } catch (err) {
+      toast.error("Failed to delete company");
     }
   };
 
-  const handleSaveCounselor = () => {
-    if (!counselorForm.name || !counselorForm.title) {
+  const handleSaveMentor = async () => {
+    if (!mentorForm.name || !mentorForm.title) {
       toast.error("Please fill in required fields");
       return;
     }
+    const formData = new FormData();
+    formData.append("name", mentorForm.name);
+    formData.append("title", mentorForm.title);
+    formData.append("specialization", mentorForm.specialization || "");
+    formData.append("bio", mentorForm.bio || "");
+    formData.append("experience", mentorForm.experience.toString());
+    formData.append("rating", mentorForm.rating.toString());
+    if (mentorFile) formData.append("image", mentorFile);
 
-    if (editingCounselor) {
-      updateCounselor(editingCounselor.id, counselorForm);
-      toast.success("Counselor updated successfully");
-    } else {
-      addCounselor(counselorForm);
-      toast.success("Counselor added successfully");
+    try {
+      if (editingMentor) {
+        await api.put(`/api/mentors/${editingMentor.id}`, formData);
+        toast.success("Mentor updated successfully");
+      } else {
+        await api.post("/api/mentors", formData);
+        toast.success("Mentor added successfully");
+      }
+      setMentorDialogOpen(false);
+      setEditingMentor(null);
+      setMentorForm({ name: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5 });
+      setMentorFile(null);
+      setMentorPreview(null);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Error saving mentor");
+    }
+  };
+
+  const handleEditMentor = (mentor: Mentor) => {
+    setEditingMentor(mentor);
+    setMentorForm({
+      name: mentor.name,
+      title: mentor.title,
+      specialization: mentor.specialization || "",
+      bio: mentor.bio || "",
+      experience: mentor.experience,
+      rating: mentor.rating,
+    });
+    setMentorPreview(mentor.image ? `/${mentor.image}` : null);
+    setMentorFile(null);
+    setMentorDialogOpen(true);
+  };
+
+  const handleDeleteMentor = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this mentor?")) return;
+    try {
+      await api.delete(`/api/mentors/${id}`);
+      toast.success("Mentor deleted successfully");
+      await refreshData();
+    } catch (err) {
+      toast.error("Failed to delete mentor");
+    }
+  };
+
+  const handleApproveBooking = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    const confirmed = confirm(
+      `Approve ${booking.student_name}'s application?\n\n` +
+      `A payment link for GHS 2.00 will be sent to ${booking.student_email}.\n` +
+      `The student has 24 hours to complete payment.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await api.post(`/api/admin/bookings/${bookingId}/approve`);
+      toast.success("Application approved! Payment link for GHS 2.00 sent.");
+      setBookings(bookings.map(b => 
+        b.id === bookingId ? { ...b, status: 'approved' as const } : b
+      ));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to approve application");
+    }
+  };
+
+  const handleRejectBooking = async (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    const reason = prompt(
+      `Reject ${booking.student_name}'s application?\n\n` +
+      `Please provide a reason (will be sent to the student):`,
+      ""
+    );
+
+    if (!reason || reason.trim().length < 10) {
+      toast.error("Rejection reason must be at least 10 characters.");
+      return;
     }
 
-    setCounselorDialogOpen(false);
-    setEditingCounselor(null);
-    setCounselorForm({
-      name: "",
-      title: "",
-      specialization: "",
-      bio: "",
-      image: "👨‍💼",
-      experience: 5,
-      rating: 4.5,
-    });
-  };
+    const confirmed = confirm(`Reject application with reason:\n"${reason.trim()}"`);
+    if (!confirmed) return;
 
-  const handleEditCounselor = (counselor: Counselor) => {
-    setEditingCounselor(counselor);
-    setCounselorForm(counselor);
-    setCounselorDialogOpen(true);
-  };
-
-  const handleDeleteCounselor = (id: string) => {
-    if (confirm("Are you sure you want to delete this counselor?")) {
-      deleteCounselor(id);
-      toast.success("Counselor deleted successfully");
+    try {
+      await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
+      toast.success("Application rejected and rejection email sent.");
+      setBookings(bookings.map(b => 
+        b.id === bookingId ? { ...b, status: 'rejected' as const } : b
+      ));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to reject application");
     }
   };
 
   const stats = [
-    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary" },
-    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
-    { icon: BookOpen, label: "Booked", value: bookedSlots, color: "bg-destructive" },
-    { icon: UserCircle, label: "Counselors", value: counselors.length, color: "bg-muted-foreground" },
-  ];
+  { 
+    icon: Building, 
+    label: "Companies", 
+    value: companies.length, 
+    color: "bg-primary",
+    onClick: () => navigate("/companies-dashboard")
+  },
+  { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
+  { 
+    icon: CheckCircle, 
+    label: "Booked Slots", 
+    value: bookedSlots, 
+    color: "bg-blue-500",
+    onClick: () => navigate("/booked-slots")
+  },
+  { 
+    icon: Clock, 
+    label: "Pending Review", 
+    value: pendingBookings, 
+    color: "bg-yellow-500",
+    onClick: () => navigate("/pending-applications")
+  },
+  { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
+  { 
+    icon: UserCircle, 
+    label: "Mentors", 
+    value: mentors.length, 
+    color: "bg-muted-foreground",
+    onClick: () => navigate("/mentors-dashboard")
+  },
+];
+
+  const displayedCompanies = companies.slice(0, visibleCompanies);
+  const displayedMentors = mentors.slice(0, visibleMentors);
+
+  const hasMoreCompanies = visibleCompanies < companies.length;
+  const hasMoreMentors = visibleMentors < mentors.length;
+
+  const loadMoreCompanies = () => setVisibleCompanies((prev) => prev + ITEMS_PER_PAGE);
+  const loadMoreMentors = () => setVisibleMentors((prev) => prev + ITEMS_PER_PAGE);
+
+  const openCvModal = (booking: Booking) => {
+    setCurrentCvPath(booking.cv_path);
+    setCurrentStudentName(booking.student_name);
+    setCurrentCompanyName(booking.company.name);
+    setCvModalOpen(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-lg">Loading dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Header */}
       <section className="pt-24 lg:pt-32 pb-8 gradient-hero">
         <div className="container mx-auto px-4 lg:px-8">
           <motion.div
@@ -191,27 +483,29 @@ const Dashboard = () => {
               Admin Dashboard
             </h1>
             <p className="text-primary-foreground/80">
-              Manage companies, slots, and counselors
+              Manage companies, mentors, and internship applications
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Stats */}
       <section className="py-8 -mt-8">
         <div className="container mx-auto px-4 lg:px-8">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
           >
-            {stats.map((stat, index) => (
+            {stats.map((stat) => (
               <motion.div
                 key={stat.label}
                 variants={itemVariants}
-                whileHover={{ scale: 1.05 }}
-                className="bg-card rounded-xl p-6 shadow-elevated border border-border text-center"
+                whileHover={{ scale: stat.onClick ? 1.05 : 1.02 }}
+                className={`bg-card rounded-xl p-6 shadow-elevated border border-border text-center transition-all ${
+                  stat.onClick ? "cursor-pointer hover:shadow-xl" : ""
+                }`}
+                onClick={stat.onClick}
               >
                 <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mx-auto mb-3`}>
                   <stat.icon className="h-6 w-6 text-primary-foreground" />
@@ -224,7 +518,6 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Main Content */}
       <section className="py-8">
         <div className="container mx-auto px-4 lg:px-8">
           <Tabs defaultValue="companies" className="space-y-6">
@@ -232,84 +525,108 @@ const Dashboard = () => {
               <TabsTrigger value="companies" className="flex items-center gap-2">
                 <Building className="h-4 w-4" /> Companies
               </TabsTrigger>
-              <TabsTrigger value="counselors" className="flex items-center gap-2">
-                <Users className="h-4 w-4" /> Counselors
+              <TabsTrigger value="mentors" className="flex items-center gap-2">
+                <Users className="h-4 w-4" /> Mentors
               </TabsTrigger>
               <TabsTrigger value="bookings" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" /> Bookings
               </TabsTrigger>
             </TabsList>
 
-            {/* Companies Tab */}
-            <TabsContent value="companies" className="space-y-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between"
-              >
+            <TabsContent value="companies" className="space-y-8">
+              <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
                 <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="accent" onClick={() => {
-                      setEditingCompany(null);
-                      setCompanyForm({
-                        name: "",
-                        logo: "🏢",
-                        industry: "",
-                        description: "",
-                        location: "",
-                        totalSlots: 5,
-                        availableSlots: 5,
-                      });
-                    }}>
+                    <Button
+                      variant="accent"
+                      onClick={() => {
+                        setEditingCompany(null);
+                        setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 });
+                        setCompanyFile(null);
+                        setCompanyPreview(null);
+                      }}
+                    >
                       <Plus className="h-4 w-4 mr-2" /> Add Company
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
-                      <DialogTitle>
-                        {editingCompany ? "Edit Company" : "Add New Company"}
-                      </DialogTitle>
-                      <DialogDescription>
-                        Fill in the company details below
-                      </DialogDescription>
+                      <DialogTitle>{editingCompany ? "Edit Company" : "Add New Company"}</DialogTitle>
+                      <DialogDescription>Fill in the company details below</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
                       <div className="grid grid-cols-2 gap-4">
-                        <div>
+                        <div className="col-span-2 md:col-span-1">
                           <Label>Company Name *</Label>
                           <Input
+                            placeholder="Enter name"
                             value={companyForm.name}
                             onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
                           />
                         </div>
-                        <div>
-                          <Label>Logo (emoji)</Label>
-                          <Input
-                            value={companyForm.logo}
-                            onChange={(e) => setCompanyForm({ ...companyForm, logo: e.target.value })}
-                          />
+                        <div className="col-span-2 md:col-span-1">
+                          <Label>Industry *</Label>
+                          <Select
+                            value={companyForm.industry}
+                            onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select industry" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {INDUSTRIES.map((ind) => (
+                                <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Industry *</Label>
-                          <Input
-                            value={companyForm.industry}
-                            onChange={(e) => setCompanyForm({ ...companyForm, industry: e.target.value })}
-                          />
+                      <div>
+                        <Label>Company Logo</Label>
+                        <div className="mt-2 flex items-center gap-4">
+                          <div
+                            className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer"
+                            onClick={() => companyFileInputRef.current?.click()}
+                          >
+                            {companyPreview ? (
+                              <img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                              <ImageIcon className="text-muted-foreground w-6 h-6" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              ref={companyFileInputRef}
+                              className="hidden"
+                              onChange={handleCompanyImageChange}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => companyFileInputRef.current?.click()}
+                            >
+                              <Upload className="h-4 w-4 mr-2" /> Upload Logo
+                            </Button>
+                          </div>
                         </div>
-                        <div>
-                          <Label>Location</Label>
-                          <Input
-                            value={companyForm.location}
-                            onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
-                          />
-                        </div>
+                      </div>
+                      <div>
+                        <Label>Location</Label>
+                        <Input
+                          placeholder="e.g. San Francisco, CA"
+                          value={companyForm.location}
+                          onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
+                        />
                       </div>
                       <div>
                         <Label>Description</Label>
                         <Textarea
+                          placeholder="Briefly describe the company..."
                           value={companyForm.description}
                           onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })}
                         />
@@ -319,22 +636,16 @@ const Dashboard = () => {
                           <Label>Total Slots</Label>
                           <Input
                             type="number"
-                            value={companyForm.totalSlots}
-                            onChange={(e) => setCompanyForm({
-                              ...companyForm,
-                              totalSlots: parseInt(e.target.value) || 0,
-                            })}
+                            value={companyForm.total_slots}
+                            onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })}
                           />
                         </div>
                         <div>
                           <Label>Available Slots</Label>
                           <Input
                             type="number"
-                            value={companyForm.availableSlots}
-                            onChange={(e) => setCompanyForm({
-                              ...companyForm,
-                              availableSlots: parseInt(e.target.value) || 0,
-                            })}
+                            value={companyForm.available_slots}
+                            onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })}
                           />
                         </div>
                       </div>
@@ -346,12 +657,7 @@ const Dashboard = () => {
                 </Dialog>
               </motion.div>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border"
-              >
+              <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-secondary">
@@ -364,7 +670,7 @@ const Dashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {companies.map((company, index) => (
+                      {displayedCompanies.map((company, index) => (
                         <motion.tr
                           key={company.id}
                           initial={{ opacity: 0, x: -20 }}
@@ -374,34 +680,25 @@ const Dashboard = () => {
                         >
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              <span className="text-2xl">{company.logo}</span>
+                              {company.logo ? (
+                                <img src={`/${company.logo}`} alt={company.name} className="w-8 h-8 rounded object-cover border border-border" />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs">Building</div>
+                              )}
                               <span className="font-medium">{company.name}</span>
                             </div>
                           </td>
-                          <td className="p-4 text-muted-foreground hidden md:table-cell">
-                            {company.industry}
-                          </td>
-                          <td className="p-4 text-muted-foreground hidden md:table-cell">
-                            {company.location}
-                          </td>
+                          <td className="p-4 text-muted-foreground hidden md:table-cell">{company.industry}</td>
+                          <td className="p-4 text-muted-foreground hidden md:table-cell">{company.location || "-"}</td>
                           <td className="p-4 text-center">
-                            <span className="text-accent font-semibold">{company.availableSlots}</span>
-                            /{company.totalSlots}
+                            <span className="text-accent font-semibold">{company.available_slots}</span>/{company.total_slots}
                           </td>
-                          <td className="p-4">
+                          <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditCompany(company)}
-                              >
+                              <Button variant="ghost" size="icon" onClick={() => handleEditCompany(company)}>
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteCompany(company.id)}
-                              >
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCompany(company.id)}>
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
                             </div>
@@ -411,81 +708,99 @@ const Dashboard = () => {
                     </tbody>
                   </table>
                 </div>
-              </motion.div>
+              </div>
+
+              {hasMoreCompanies && (
+                <div className="text-center">
+                  <Button variant="accent" size="lg" onClick={loadMoreCompanies}>
+                    Load More Companies
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
-            {/* Counselors Tab */}
-            <TabsContent value="counselors" className="space-y-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between"
-              >
-                <h2 className="text-xl font-semibold">Manage Counselors</h2>
-                <Dialog open={counselorDialogOpen} onOpenChange={setCounselorDialogOpen}>
+            <TabsContent value="mentors" className="space-y-8">
+              <motion.div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Manage Mentors</h2>
+                <Dialog open={mentorDialogOpen} onOpenChange={setMentorDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="accent" onClick={() => {
-                      setEditingCounselor(null);
-                      setCounselorForm({
-                        name: "",
-                        title: "",
-                        specialization: "",
-                        bio: "",
-                        image: "👨‍💼",
-                        experience: 5,
-                        rating: 4.5,
-                      });
-                    }}>
-                      <Plus className="h-4 w-4 mr-2" /> Add Counselor
+                    <Button
+                      variant="accent"
+                      onClick={() => {
+                        setEditingMentor(null);
+                        setMentorForm({ name: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5 });
+                        setMentorFile(null);
+                        setMentorPreview(null);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add Mentor
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
-                      <DialogTitle>
-                        {editingCounselor ? "Edit Counselor" : "Add New Counselor"}
-                      </DialogTitle>
-                      <DialogDescription>
-                        Fill in the counselor details below
-                      </DialogDescription>
+                      <DialogTitle>{editingMentor ? "Edit Mentor" : "Add New Mentor"}</DialogTitle>
+                      <DialogDescription>Fill in the mentor details below</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
+                      <div className="flex flex-col items-center mb-4">
+                        <div
+                          className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2"
+                          onClick={() => mentorFileInputRef.current?.click()}
+                        >
+                          {mentorPreview ? (
+                            <img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="text-muted-foreground w-10 h-10" />
+                          )}
+                        </div>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          ref={mentorFileInputRef}
+                          className="hidden"
+                          onChange={handleMentorImageChange}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => mentorFileInputRef.current?.click()}
+                        >
+                          Change Photo
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Name *</Label>
                           <Input
-                            value={counselorForm.name}
-                            onChange={(e) => setCounselorForm({ ...counselorForm, name: e.target.value })}
+                            placeholder="Full Name"
+                            value={mentorForm.name}
+                            onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })}
                           />
                         </div>
                         <div>
-                          <Label>Image (emoji)</Label>
+                          <Label>Job Title *</Label>
                           <Input
-                            value={counselorForm.image}
-                            onChange={(e) => setCounselorForm({ ...counselorForm, image: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Title *</Label>
-                          <Input
-                            value={counselorForm.title}
-                            onChange={(e) => setCounselorForm({ ...counselorForm, title: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Specialization</Label>
-                          <Input
-                            value={counselorForm.specialization}
-                            onChange={(e) => setCounselorForm({ ...counselorForm, specialization: e.target.value })}
+                            placeholder="e.g. Senior Developer"
+                            value={mentorForm.title}
+                            onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })}
                           />
                         </div>
                       </div>
                       <div>
+                        <Label>Specialization</Label>
+                        <Input
+                          placeholder="e.g. Frontend Architecture"
+                          value={mentorForm.specialization}
+                          onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
+                        />
+                      </div>
+                      <div>
                         <Label>Bio</Label>
                         <Textarea
-                          value={counselorForm.bio}
-                          onChange={(e) => setCounselorForm({ ...counselorForm, bio: e.target.value })}
+                          placeholder="Mentor's professional background..."
+                          value={mentorForm.bio}
+                          onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -493,11 +808,8 @@ const Dashboard = () => {
                           <Label>Experience (years)</Label>
                           <Input
                             type="number"
-                            value={counselorForm.experience}
-                            onChange={(e) => setCounselorForm({
-                              ...counselorForm,
-                              experience: parseInt(e.target.value) || 0,
-                            })}
+                            value={mentorForm.experience}
+                            onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })}
                           />
                         </div>
                         <div>
@@ -507,16 +819,13 @@ const Dashboard = () => {
                             step="0.1"
                             min="0"
                             max="5"
-                            value={counselorForm.rating}
-                            onChange={(e) => setCounselorForm({
-                              ...counselorForm,
-                              rating: parseFloat(e.target.value) || 0,
-                            })}
+                            value={mentorForm.rating}
+                            onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })}
                           />
                         </div>
                       </div>
-                      <Button variant="accent" className="w-full" onClick={handleSaveCounselor}>
-                        {editingCounselor ? "Update Counselor" : "Add Counselor"}
+                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
+                        {editingMentor ? "Update Mentor" : "Add Mentor"}
                       </Button>
                     </div>
                   </DialogContent>
@@ -529,111 +838,203 @@ const Dashboard = () => {
                 animate="visible"
                 className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
               >
-                {counselors.map((counselor, index) => (
+                {displayedMentors.map((mentor) => (
                   <motion.div
-                    key={counselor.id}
+                    key={mentor.id}
                     variants={itemVariants}
                     whileHover={{ y: -4 }}
                     className="bg-card rounded-xl p-6 shadow-soft border border-border"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <span className="text-4xl">{counselor.image}</span>
+                        {mentor.image ? (
+                          <img src={`/${mentor.image}`} alt={mentor.name} className="w-12 h-12 rounded-full object-cover border border-border" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>
+                        )}
                         <div>
-                          <h3 className="font-semibold">{counselor.name}</h3>
-                          <p className="text-sm text-accent">{counselor.title}</p>
+                          <h3 className="font-semibold">{mentor.name}</h3>
+                          <p className="text-sm text-accent">{mentor.title}</p>
                         </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditCounselor(counselor)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteCounselor(counselor.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.id)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{counselor.specialization}</p>
-                    <p className="text-xs text-muted-foreground">{counselor.experience} years experience • ⭐ {counselor.rating}</p>
+                    <p className="text-sm text-muted-foreground mb-2">{mentor.specialization || "General"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {mentor.experience} years experience • ⭐ {mentor.rating}
+                    </p>
                   </motion.div>
                 ))}
               </motion.div>
+
+              {hasMoreMentors && (
+                <div className="text-center">
+                  <Button variant="accent" size="lg" onClick={loadMoreMentors}>
+                    Load More Mentors
+                  </Button>
+                </div>
+              )}
             </TabsContent>
 
-            {/* Bookings Tab */}
-            <TabsContent value="bookings" className="space-y-4">
-              <motion.h2
+            <TabsContent value="bookings" className="space-y-8">
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-xl font-semibold"
+                className="flex items-center justify-between"
               >
-                Recent Bookings
-              </motion.h2>
+                <h2 className="text-2xl font-bold">Internship Applications</h2>
+              </motion.div>
 
-              {bookings.length === 0 ? (
+              <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-secondary">
+                      <tr>
+                        <th className="text-left p-4 font-medium">Student</th>
+                        <th className="text-left p-4 font-medium">Company</th>
+                        <th className="text-left p-4 font-medium hidden md:table-cell">Email</th>
+                        <th className="text-left p-4 font-medium hidden lg:table-cell">Applied</th>
+                        <th className="text-center p-4 font-medium">Status</th>
+                        <th className="text-center p-4 font-medium">CV</th>
+                        <th className="text-right p-4 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bookings.map((booking, index) => (
+                        <motion.tr
+                          key={booking.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border-t border-border hover:bg-secondary/50 transition-colors"
+                        >
+                          <td className="p-4">
+                            <div>
+                              <span className="font-medium">{booking.student_name}</span>
+                              <p className="text-sm text-muted-foreground">{booking.university}</p>
+                            </div>
+                          </td>
+                          <td className="p-4">{booking.company.name}</td>
+                          <td className="p-4 hidden md:table-cell">{booking.student_email}</td>
+                          <td className="p-4 hidden lg:table-cell">
+                            {new Date(booking.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              booking.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                              booking.status === 'paid' ? 'bg-green-100 text-green-800' :
+                              booking.status === 'expired' ? 'bg-gray-100 text-gray-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openCvModal(booking)}
+                            >
+                              <FileText className="h-4 w-4 mr-2" /> View CV
+                            </Button>
+                          </td>
+                          <td className="p-4 text-right">
+                            {booking.status === 'pending' && (
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="accent"
+                                  size="sm"
+                                  onClick={() => handleApproveBooking(booking.id)}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" /> Approve
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleRejectBooking(booking.id)}
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {bookings.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-card rounded-xl p-12 shadow-soft text-center border border-border"
+                  className="text-center py-16"
                 >
-                  <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">No bookings yet</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Bookings will appear here when students reserve internship slots
+                  <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">No applications yet</h3>
+                  <p className="text-muted-foreground">
+                    Applications will appear here when students apply
                   </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border"
-                >
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-secondary">
-                        <tr>
-                          <th className="text-left p-4 font-medium">Student</th>
-                          <th className="text-left p-4 font-medium hidden md:table-cell">Email</th>
-                          <th className="text-left p-4 font-medium">Company</th>
-                          <th className="text-left p-4 font-medium hidden md:table-cell">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bookings.map((booking, index) => {
-                          const company = companies.find((c) => c.id === booking.companyId);
-                          return (
-                            <motion.tr
-                              key={booking.id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              className="border-t border-border"
-                            >
-                              <td className="p-4 font-medium">{booking.studentName}</td>
-                              <td className="p-4 text-muted-foreground hidden md:table-cell">
-                                {booking.studentEmail}
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-2">
-                                  <span>{company?.logo}</span>
-                                  <span>{company?.name}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 text-muted-foreground hidden md:table-cell">
-                                {new Date(booking.bookedAt).toLocaleDateString()}
-                              </td>
-                            </motion.tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
                 </motion.div>
               )}
             </TabsContent>
           </Tabs>
         </div>
       </section>
+
+      {/* CV Viewer Modal */}
+      <Dialog open={cvModalOpen} onOpenChange={setCvModalOpen}>
+        <DialogContent 
+          className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col"
+          aria-describedby={undefined}
+        >
+          <DialogHeader className="p-6 pb-3 flex flex-row items-center justify-between border-b bg-card">
+            <div>
+              <DialogTitle className="text-xl">
+                CV - {currentStudentName}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Application for {currentCompanyName}
+              </DialogDescription>
+            </div>
+            {currentCvPath && (
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={getCvUrl(currentCvPath)}
+                  download
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Download PDF
+                </a>
+              </Button>
+            )}
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden bg-gray-50">
+            {currentCvPath ? (
+              <iframe
+                src={getCvUrl(currentCvPath)}
+                className="w-full h-full"
+                title="CV Viewer"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <FileText className="w-16 h-16 mb-4 opacity-50" />
+                <p>No CV uploaded</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

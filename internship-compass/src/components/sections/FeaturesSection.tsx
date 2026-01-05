@@ -12,7 +12,7 @@ const features = [
   },
   {
     icon: Users,
-    title: "Expert Counsellors",
+    title: "Expert Mentors",
     description: "Get personalized guidance from industry professionals who understand your career aspirations.",
     color: "primary",
   },

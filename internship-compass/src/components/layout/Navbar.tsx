@@ -24,28 +24,22 @@ export const Navbar = () => {
   const loadUser = () => {
     try {
       const stored = localStorage.getItem("user");
-      // console.log("Navbar loading user from localStorage:", stored); // ← DEBUG
-
       if (!stored || stored === "null" || stored === "undefined") {
         setUser(null);
       } else {
         const parsed = JSON.parse(stored);
-        // console.log("Navbar parsed user:", parsed); // ← DEBUG
         setUser(parsed);
       }
     } catch (error) {
-      // console.warn("Failed to parse user from localStorage", error);
       localStorage.removeItem("user");
       setUser(null);
     }
   };
 
-  // ← THIS useEffect IS CRITICAL
   useEffect(() => {
-    loadUser(); // Initial load
+    loadUser();
 
     const handleUpdate = () => {
-      // console.log("Navbar received userUpdated event");
       loadUser();
     };
 
@@ -78,7 +72,6 @@ export const Navbar = () => {
       transition={{ duration: 0.5 }}
       className="fixed top-0 left-0 right-0 z-50 glass"
     >
-      {/* === ALL YOUR JSX REMAINS THE SAME === */}
       <div className="container mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
           <Link to="/" className="flex items-center">
@@ -100,23 +93,31 @@ export const Navbar = () => {
                 {link.label}
               </Link>
             ))}
+
+            {/* Dashboard placed in main nav for admins, close to logout */}
+            {isAdmin && (
+              <Link
+                to="/dashboard"
+                className={cn(
+                  "px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center",
+                  isActive("/dashboard")
+                    ? "bg-accent text-accent-foreground"
+                    : "text-foreground/80 hover:text-foreground hover:bg-primary/10"
+                )}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Dashboard
+              </Link>
+            )}
           </div>
 
+          {/* Right side: Logout (and Get Started for non-admins) */}
           <div className="hidden lg:flex items-center gap-3">
             {isAdmin && (
-              <>
-                <Link to="/dashboard">
-                  <Button variant="nav-cta" size="default">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </Button>
-                </Link>
-
-                <Button variant="destructive" size="default" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </Button>
-              </>
+              <Button variant="destructive" size="default" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
             )}
 
             {(!isLoggedIn || !isAdmin) && (
@@ -137,7 +138,6 @@ export const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile menu - unchanged */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -149,7 +149,12 @@ export const Navbar = () => {
           >
             <div className="container mx-auto px-4 py-4 space-y-2">
               {navLinks.map((link, index) => (
-                <motion.div key={link.label} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
+                <motion.div
+                  key={link.label}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
                   <Link
                     to={link.href}
                     className={cn(
@@ -165,21 +170,35 @@ export const Navbar = () => {
                 </motion.div>
               ))}
 
+              {isAdmin && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: navLinks.length * 0.1 }}
+                >
+                  <Link
+                    to="/dashboard"
+                    className={cn(
+                      "block font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center",
+                      isActive("/dashboard")
+                        ? "bg-accent text-accent-foreground"
+                        : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+                    )}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Shield className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </Link>
+                </motion.div>
+              )}
+
               <div className="pt-4 space-y-3 border-t border-border">
                 {isAdmin && (
-                  <>
-                    <Link to="/dashboard" onClick={() => setIsOpen(false)}>
-                      <Button variant="outline" className="w-full">
-                        <Shield className="w-4 h-4 mr-2" />
-                        Dashboard 
-                      </Button>
-                    </Link>
-                    <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </Button>
-                  </>
-                )} 
+                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+                )}
 
                 {(!isLoggedIn || !isAdmin) && (
                   <Link to="/internships" onClick={() => setIsOpen(false)}>

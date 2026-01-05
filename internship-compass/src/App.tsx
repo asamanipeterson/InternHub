@@ -12,6 +12,10 @@ import About from "./pages/About";
 import Dashboard from "./pages/Dashboard";
 import Contact from "./pages/Contact";
 import Companies from "./pages/Companies";
+import BookedSlots from "./pages/BookedSlots";
+import CompaniesDashboard from "./pages/CompaniesDashboard";
+import PendingApplications from "./pages/PendingApplications";
+import MentorsDashboard from "./pages/MentorsDashboard";
 import Students from "./pages/Students";
 import Blog from "./pages/Blog";
 import CareerTips from "./pages/CareerTips";
@@ -55,6 +59,10 @@ const App = () => (
           {/* Only logged-in admins can access /dashboard */}
           <Route element={<ProtectedRoute adminOnly={true} />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/booked-slots" element={<BookedSlots />} />
+            <Route path="/companies-dashboard" element={<CompaniesDashboard />} />
+            <Route path="/pending-applications" element={<PendingApplications />} />
+            <Route path="/mentors-dashboard" element={<MentorsDashboard />} />
           </Route>
 
           {/* Catch-all 404 */}
