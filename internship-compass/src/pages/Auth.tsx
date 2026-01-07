@@ -66,7 +66,7 @@ const Auth = () => {
           navigate("/dashboard", { replace: true });
         } else {
           toast.success("Login successful!");
-          navigate("/", { replace: true });
+          navigate("*", { replace: true });
         }
       } else {
         console.error("Malformed response from server", response);

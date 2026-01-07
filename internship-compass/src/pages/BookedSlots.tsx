@@ -205,15 +205,19 @@ const BookedSlots = () => {
               </DialogDescription>
             </div>
             {currentCvPath && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={getCvUrl(currentCvPath)}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Download className="h-4 w-4 mr-2" /> Download PDF
-                </a>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = getCvUrl(currentCvPath);
+                  link.download = 'cv.pdf';
+                  link.target = '_blank';
+                  link.rel = 'noopener noreferrer';
+                  link.click();
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" /> Download PDF
               </Button>
             )}
           </DialogHeader>

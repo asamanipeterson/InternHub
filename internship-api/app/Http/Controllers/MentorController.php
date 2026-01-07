@@ -23,6 +23,8 @@ class MentorController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'experience' => 'required|integer|min:0',
             'rating' => 'required|numeric|min:0|max:5',
+            'session_price' => 'required|numeric|min:0',
+            'zoom_email' => 'nullable|email|max:255', // ← New field
         ]);
 
         if ($request->hasFile('image')) {
@@ -45,10 +47,12 @@ class MentorController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'experience' => 'required|integer|min:0',
             'rating' => 'required|numeric|min:0|max:5',
+            'session_price' => 'required|numeric|min:0',
+            'zoom_email' => 'nullable|email|max:255', // ← New field
         ]);
 
         if ($request->hasFile('image')) {
-            // Delete old image
+            // Delete old image if exists
             if ($mentor->image && Storage::disk('public')->exists(str_replace('storage/', '', $mentor->image))) {
                 Storage::disk('public')->delete(str_replace('storage/', '', $mentor->image));
             }
@@ -71,5 +75,10 @@ class MentorController extends Controller
         $mentor->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function show(Mentor $mentor)
+    {
+        return response()->json($mentor);
     }
 }

@@ -40,5 +40,10 @@ return [
         'payment_url' => env('PAYSTACK_PAYMENT_URL', 'https://api.paystack.co'),
         'merchant_email' => env('MAIL_FROM_ADDRESS'),
     ],
+    'zoom' => [
+        'account_id' => env('ZOOM_ACCOUNT_ID'),
+        'client_id' => env('ZOOM_CLIENT_ID'),
+        'client_secret' => env('ZOOM_CLIENT_SECRET'),
+    ],
 
 ];

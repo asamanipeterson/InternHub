@@ -131,16 +131,16 @@ class BookingController extends Controller
             'payment_reference' => $reference,
             'amount'            => $amountInPesewas,
             'currency'          => 'GHS',
-            // 'expires_at'        => now()->addHours(24),
-            'expires_at' => now()->addSeconds(30), // For testing purposes
+            'expires_at'        => now()->addHours(24),
+            // 'expires_at' => now()->addSeconds(30), // For testing purposes
         ]);
 
         // Send payment link email
         Mail::to($booking->student_email)->send(new PaymentLinkMail($booking, $data['authorization_url']));
 
         // Schedule auto-expiry after 24 hours
-        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
-        ExpireBookingJob::dispatch($booking->id)->delay(now()->addSeconds(30)); // For testing purposes
+        ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
+        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addSeconds(30)); // For testing purposes
 
         return response()->json([
             'message'     => 'Application approved. Payment link for GHS 2.00 sent to student.',

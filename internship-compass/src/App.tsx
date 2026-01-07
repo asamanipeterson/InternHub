@@ -1,6 +1,6 @@
 // src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster as Sonner } from "sonner"; // This is the custom one we're styling
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -25,6 +25,7 @@ import Careers from "./pages/Careers";
 import PartnerWithUs from "./pages/PartnerWithUs";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import MentorProfile from "./pages/MentorProfile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -33,7 +34,31 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
+      
+      {/* Custom Styled Sonner Toasts */}
+      <Sonner
+        position="top-right"
+        closeButton
+        richColors
+        expand={false}
+        duration={4000}
+        toastOptions={{
+          classNames: {
+            toast:
+              "group toast flex items-center gap-4 rounded-xl shadow-2xl border-0 px-6 py-4 min-w-[340px] backdrop-blur-md animate-in slide-in-from-right-full duration-500",
+            title: "font-bold text-md",
+            description: "text-sm opacity-90 mt-1",
+            success: "bg-green-600 text-white border-green-700",
+            error: "bg-red-600 text-white border-red-700",
+            info: "bg-blue-600 text-white",
+            warning: "bg-amber-600 text-white",
+            closeButton:
+              "bg-white/20 hover:bg-white/30 text-white border-0 rounded-full w-8 h-8",
+            actionButton: "bg-white text-green-600 hover:bg-gray-100 font-medium",
+            cancelButton: "bg-transparent text-white/70 hover:text-white",
+          },
+        }}
+      />
 
       <BrowserRouter>
         <Routes>
@@ -41,6 +66,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/internships" element={<Internships />} />
           <Route path="/mentorship" element={<Mentorship />} />
+          <Route path="/mentorship/mentor/:uuid" element={<MentorProfile />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/companies" element={<Companies />} />
@@ -56,7 +82,6 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
 
           {/* Protected Admin Dashboard */}
-          {/* Only logged-in admins can access /dashboard */}
           <Route element={<ProtectedRoute adminOnly={true} />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/booked-slots" element={<BookedSlots />} />

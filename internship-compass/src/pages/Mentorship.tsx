@@ -5,20 +5,44 @@ import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Star, Award, Clock, Calendar, Sparkles, Target, Users, Lightbulb, Rocket, MessageCircle, User, LogIn } from "lucide-react";
+import {
+  Star,
+  Award,
+  Clock,
+  Calendar,
+  Sparkles,
+  Target,
+  Users,
+  Lightbulb,
+  Rocket,
+  MessageCircle,
+  User,
+  LogIn,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface Mentor {
   id: string;
+  uuid: string;
   name: string;
   title: string;
   specialization: string | null;
   bio: string | null;
   image: string | null;
   experience: number;
-  rating: number;
+  rating: number | string;
+  session_price: number | string;
 }
 
 const containerVariants = {
@@ -90,6 +114,20 @@ const Mentorship = () => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Booking Dialog State
+  const [open, setOpen] = useState(false);
+  const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [formData, setFormData] = useState({
+    student_name: "",
+    student_email: "",
+    student_phone: "",
+    scheduled_at: ""
+  });
+
+  const navigate = useNavigate();
+
   useEffect(() => {
     const fetchMentors = async () => {
       try {
@@ -111,19 +149,60 @@ const Mentorship = () => {
     fetchMentors();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-lg">Loading expert mentors...</p>
-      </div>
-    );
-  }
+  const openBookingDialog = (mentor: Mentor) => {
+    setSelectedMentor(mentor);
+    setSelectedDate("");
+    setAvailableTimes([]);
+    setFormData({ student_name: "", student_email: "", student_phone: "", scheduled_at: "" });
+    setOpen(true);
+  };
+
+  const handleSubmitBooking = async () => {
+    if (!selectedMentor) return;
+
+    if (!formData.student_name || !formData.student_email || !formData.scheduled_at) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const response = await api.post("/api/mentor/book/initiate", {
+        mentor_id: selectedMentor.id,
+        student_name: formData.student_name,
+        student_email: formData.student_email,
+        student_phone: formData.student_phone,
+        scheduled_at: formData.scheduled_at
+      });
+
+      if (response.data.success) {
+        toast.success("Redirecting to payment...");
+        window.location.href = response.data.authorization_url;
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Booking failed. Please try again.");
+    }
+  };
+
+  const goToProfile = (mentor: Mentor) => {
+    navigate(`/mentorship/mentor/${mentor.uuid}`);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("booking") === "success") {
+      toast.success("Payment successful! Check your email for your Zoom meeting link.");
+      window.history.replaceState({}, "", "/mentorship");
+    } else if (params.get("booking") === "failed") {
+      toast.error("Payment failed or was cancelled.");
+      window.history.replaceState({}, "", "/mentorship");
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Hero Header */}
+      {/* Hero Section */}
       <section className="pt-32 pb-20 gradient-hero relative overflow-hidden">
         <motion.div
           className="absolute top-10 right-[5%] w-96 h-96 rounded-full bg-accent/10 blur-3xl"
@@ -202,7 +281,6 @@ const Mentorship = () => {
         </div>
       </section>
 
-      {/* Auth Required Message */}
       {!isAuthenticated && (
         <section className="py-32">
           <div className="container mx-auto px-4 lg:px-8 text-center">
@@ -216,20 +294,16 @@ const Mentorship = () => {
               <p className="text-xl text-muted-foreground mb-10">
                 Expert mentorship is only available to registered users. Sign up to connect with top professionals!
               </p>
-              <Link to="/auth">
-                <Button variant="accent" size="lg" className="px-10 py-6 text-lg">
-                  Get Started
-                </Button>
-              </Link>
+              <Button variant="accent" size="lg" className="px-10 py-6 text-lg" onClick={() => navigate("/auth")}>
+                Get Started
+              </Button>
             </motion.div>
           </div>
         </section>
       )}
 
-      {/* Main Content - Only shown when authenticated */}
       {isAuthenticated && (
         <>
-          {/* Stats Section */}
           <section className="py-12 bg-secondary/30">
             <div className="container mx-auto px-4 lg:px-8">
               <motion.div
@@ -260,7 +334,6 @@ const Mentorship = () => {
             </div>
           </section>
 
-          {/* Mentors Grid */}
           <section className="py-20">
             <div className="container mx-auto px-4 lg:px-8">
               <motion.div
@@ -294,7 +367,10 @@ const Mentorship = () => {
                       whileHover={{ y: -10, scale: 1.02 }}
                       className="group"
                     >
-                      <div className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50">
+                      <div 
+                        className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
+                        onClick={() => goToProfile(mentor)}
+                      >
                         <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
                           <motion.div
                             className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
@@ -322,7 +398,9 @@ const Mentorship = () => {
                           )}
                           <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
                             <Star className="w-4 h-4 text-accent fill-accent" />
-                            <span className="text-sm font-bold text-foreground">{mentor.rating}</span>
+                            <span className="text-sm font-bold text-foreground">
+                              {Number(mentor.rating).toFixed(1)}
+                            </span>
                           </div>
                         </div>
 
@@ -349,8 +427,23 @@ const Mentorship = () => {
                             {mentor.bio || "Dedicated mentor committed to your career success."}
                           </p>
 
+                          <div className="mb-4 text-center">
+                            <p className="text-sm text-muted-foreground">Session Fee</p>
+                            <p className="text-3xl font-bold text-accent">
+                              GHS {(Number(mentor.session_price) || 0).toFixed(2)}
+                            </p>
+                          </div>
+
                           <div className="flex gap-3">
-                            <Button variant="accent" size="default" className="flex-1 rounded-xl">
+                            <Button
+                              variant="accent"
+                              size="default"
+                              className="flex-1 rounded-xl"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openBookingDialog(mentor);
+                              }}
+                            >
                               <Calendar className="w-4 h-4 mr-2" />
                               Book Session
                             </Button>
@@ -365,7 +458,6 @@ const Mentorship = () => {
                 ) : null}
               </motion.div>
 
-              {/* No Mentors Message */}
               {!loading && mentors.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -426,10 +518,10 @@ const Mentorship = () => {
                       transition={{ type: "spring", stiffness: 300 }}
                     >
                       {service.isEmoji ? (
-                        <span className="text-5xl block">{service.icon as string}</span>
+                        <span className="text-5xl block">{service.icon}</span>
                       ) : (
                         <div className={`w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center ${service.color}`}>
-                          {typeof service.icon !== 'string' && <service.icon className="w-7 h-7" />}
+                          <service.icon className="w-7 h-7" />
                         </div>
                       )}
                     </motion.div>
@@ -473,6 +565,107 @@ const Mentorship = () => {
           </section>
         </>
       )}
+
+      {/* Booking Dialog with Calendar Picker */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Book Session with {selectedMentor?.name}</DialogTitle>
+            <DialogDescription>
+              Session fee: <strong>GHS {(Number(selectedMentor?.session_price) || 0).toFixed(2)}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                value={formData.student_name}
+                onChange={(e) => setFormData({ ...formData, student_name: e.target.value })}
+                placeholder="John Doe"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.student_email}
+                onChange={(e) => setFormData({ ...formData, student_email: e.target.value })}
+                placeholder="john@example.com"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone (optional)</Label>
+              <Input
+                id="phone"
+                value={formData.student_phone}
+                onChange={(e) => setFormData({ ...formData, student_phone: e.target.value })}
+                placeholder="+233 123 456 789"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Preferred Date *</Label>
+              <Input 
+                type="date" 
+                min={new Date().toISOString().split('T')[0]}
+                value={selectedDate}
+                onChange={async (e) => {
+                  const date = e.target.value;
+                  setSelectedDate(date);
+                  setFormData({ ...formData, scheduled_at: "" });
+                  if (date && selectedMentor) {
+                    try {
+                      const res = await api.get(`/api/mentors/${selectedMentor.uuid}/available-slots?date=${date}`);
+                      setAvailableTimes(res.data);
+                    } catch {
+                      setAvailableTimes([]);
+                      toast.error("Could not load available times");
+                    }
+                  }
+                }}
+              />
+            </div>
+
+            {selectedDate && (
+              <div className="grid gap-2">
+                <Label>Available Time *</Label>
+                {availableTimes.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableTimes.map(time => (
+                      <Button
+                        key={time}
+                        variant={formData.scheduled_at === `${selectedDate}T${time}:00` ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}:00` })}
+                      >
+                        {time}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center">
+                    No available time slots on this date
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="accent" 
+              onClick={handleSubmitBooking}
+              disabled={!formData.scheduled_at}
+            >
+              Proceed to Payment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

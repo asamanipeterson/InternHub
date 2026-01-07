@@ -47,6 +47,7 @@ import {
   FileText,
   Clock,
   Download,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -64,13 +65,16 @@ interface Company {
 
 interface Mentor {
   id: string;
+  uuid: string;
   name: string;
   title: string;
   specialization: string | null;
   bio: string | null;
   image: string | null;
   experience: number;
-  rating: number;
+  rating: number | string;
+  session_price: number | string;
+  zoom_email?: string | null;
 }
 
 interface Booking {
@@ -145,6 +149,16 @@ const Dashboard = () => {
     bio: "",
     experience: 5,
     rating: 4.5,
+    session_price: 200.00,
+    zoom_email: "",
+  });
+
+  // Availability editor states
+  const [selectedMentorForAvailability, setSelectedMentorForAvailability] = useState<Mentor | null>(null);
+  const [availabilityForm, setAvailabilityForm] = useState({
+    selectedDays: [] as number[], // 1=Mon, 2=Tue, ..., 7=Sun
+    start_time: "09:00",
+    end_time: "17:00"
   });
 
   // CV Modal states
@@ -218,6 +232,7 @@ const Dashboard = () => {
   const availableSlotsTotal = companies.reduce((acc, c) => acc + c.available_slots, 0);
   const bookedSlots = totalSlots - availableSlotsTotal;
   const pendingBookings = bookings.filter(b => b.status === 'pending').length;
+  const bookedMentorships = bookings.filter(b => b.status === 'paid').length;
 
   const refreshData = async () => {
     try {
@@ -300,8 +315,8 @@ const Dashboard = () => {
   };
 
   const handleSaveMentor = async () => {
-    if (!mentorForm.name || !mentorForm.title) {
-      toast.error("Please fill in required fields");
+    if (!mentorForm.name || !mentorForm.title || !mentorForm.session_price) {
+      toast.error("Please fill in all required fields including session price");
       return;
     }
     const formData = new FormData();
@@ -311,11 +326,13 @@ const Dashboard = () => {
     formData.append("bio", mentorForm.bio || "");
     formData.append("experience", mentorForm.experience.toString());
     formData.append("rating", mentorForm.rating.toString());
+    formData.append("session_price", mentorForm.session_price.toString());
+    formData.append("zoom_email", mentorForm.zoom_email || "");
     if (mentorFile) formData.append("image", mentorFile);
 
     try {
       if (editingMentor) {
-        await api.put(`/api/mentors/${editingMentor.id}`, formData);
+        await api.put(`/api/mentors/${editingMentor.uuid}`, formData);
         toast.success("Mentor updated successfully");
       } else {
         await api.post("/api/mentors", formData);
@@ -323,7 +340,16 @@ const Dashboard = () => {
       }
       setMentorDialogOpen(false);
       setEditingMentor(null);
-      setMentorForm({ name: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5 });
+      setMentorForm({
+        name: "",
+        title: "",
+        specialization: "",
+        bio: "",
+        experience: 5,
+        rating: 4.5,
+        session_price: 200.00,
+        zoom_email: ""
+      });
       setMentorFile(null);
       setMentorPreview(null);
       await refreshData();
@@ -340,17 +366,19 @@ const Dashboard = () => {
       specialization: mentor.specialization || "",
       bio: mentor.bio || "",
       experience: mentor.experience,
-      rating: mentor.rating,
+      rating: Number(mentor.rating),
+      session_price: Number(mentor.session_price) || 200.00,
+      zoom_email: mentor.zoom_email || "",
     });
     setMentorPreview(mentor.image ? `/${mentor.image}` : null);
     setMentorFile(null);
     setMentorDialogOpen(true);
   };
 
-  const handleDeleteMentor = async (id: string) => {
+  const handleDeleteMentor = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this mentor?")) return;
     try {
-      await api.delete(`/api/mentors/${id}`);
+      await api.delete(`/api/mentors/${uuid}`);
       toast.success("Mentor deleted successfully");
       await refreshData();
     } catch (err) {
@@ -411,37 +439,44 @@ const Dashboard = () => {
   };
 
   const stats = [
-  { 
-    icon: Building, 
-    label: "Companies", 
-    value: companies.length, 
-    color: "bg-primary",
-    onClick: () => navigate("/companies-dashboard")
-  },
-  { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
-  { 
-    icon: CheckCircle, 
-    label: "Booked Slots", 
-    value: bookedSlots, 
-    color: "bg-blue-500",
-    onClick: () => navigate("/booked-slots")
-  },
-  { 
-    icon: Clock, 
-    label: "Pending Review", 
-    value: pendingBookings, 
-    color: "bg-yellow-500",
-    onClick: () => navigate("/pending-applications")
-  },
-  { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
-  { 
-    icon: UserCircle, 
-    label: "Mentors", 
-    value: mentors.length, 
-    color: "bg-muted-foreground",
-    onClick: () => navigate("/mentors-dashboard")
-  },
-];
+    { 
+      icon: Building, 
+      label: "Companies", 
+      value: companies.length, 
+      color: "bg-primary",
+      onClick: () => navigate("/companies-dashboard")
+    },
+    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
+    { 
+      icon: CheckCircle, 
+      label: "Booked Slots", 
+      value: bookedSlots, 
+      color: "bg-blue-500",
+      onClick: () => navigate("/booked-slots")
+    },
+    { 
+      icon: Clock, 
+      label: "Pending Review", 
+      value: pendingBookings, 
+      color: "bg-yellow-500",
+      onClick: () => navigate("/pending-applications")
+    },
+    { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
+    { 
+      icon: UserCircle, 
+      label: "Mentors", 
+      value: mentors.length, 
+      color: "bg-muted-foreground",
+      onClick: () => navigate("/mentors-dashboard")
+    },
+    { 
+      icon: CalendarIcon, 
+      label: "Booked Mentorships", 
+      value: bookedMentorships, 
+      color: "bg-purple-500",
+      onClick: () => {}
+    },
+  ];
 
   const displayedCompanies = companies.slice(0, visibleCompanies);
   const displayedMentors = mentors.slice(0, visibleMentors);
@@ -495,7 +530,7 @@ const Dashboard = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
           >
             {stats.map((stat) => (
               <motion.div
@@ -521,7 +556,7 @@ const Dashboard = () => {
       <section className="py-8">
         <div className="container mx-auto px-4 lg:px-8">
           <Tabs defaultValue="companies" className="space-y-6">
-            <TabsList className="grid w-full max-w-md grid-cols-3 mx-auto">
+            <TabsList className="grid w-full max-w-lg grid-cols-4 mx-auto">
               <TabsTrigger value="companies" className="flex items-center gap-2">
                 <Building className="h-4 w-4" /> Companies
               </TabsTrigger>
@@ -531,8 +566,12 @@ const Dashboard = () => {
               <TabsTrigger value="bookings" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" /> Bookings
               </TabsTrigger>
+              <TabsTrigger value="availability" className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4" /> Availability
+              </TabsTrigger>
             </TabsList>
 
+            {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
@@ -719,6 +758,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
+            {/* Mentors Tab */}
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Mentors</h2>
@@ -728,7 +768,16 @@ const Dashboard = () => {
                       variant="accent"
                       onClick={() => {
                         setEditingMentor(null);
-                        setMentorForm({ name: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5 });
+                        setMentorForm({
+                          name: "",
+                          title: "",
+                          specialization: "",
+                          bio: "",
+                          experience: 5,
+                          rating: 4.5,
+                          session_price: 200.00,
+                          zoom_email: ""
+                        });
                         setMentorFile(null);
                         setMentorPreview(null);
                       }}
@@ -824,6 +873,27 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Session Price (GHS) *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={mentorForm.session_price}
+                            onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })}
+                            placeholder="200.00"
+                          />
+                        </div>
+                        <div>
+                          <Label>Zoom Email (for auto meeting creation)</Label>
+                          <Input
+                            type="email"
+                            placeholder="mentor@company.com"
+                            value={mentorForm.zoom_email}
+                            onChange={(e) => setMentorForm({ ...mentorForm, zoom_email: e.target.value })}
+                          />
+                        </div>
+                      </div>
                       <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
                         {editingMentor ? "Update Mentor" : "Add Mentor"}
                       </Button>
@@ -861,14 +931,14 @@ const Dashboard = () => {
                         <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">{mentor.specialization || "General"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {mentor.experience} years experience • ⭐ {mentor.rating}
+                      {mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}
                     </p>
                   </motion.div>
                 ))}
@@ -883,6 +953,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
+            {/* Bookings Tab */}
             <TabsContent value="bookings" className="space-y-8">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -987,9 +1058,164 @@ const Dashboard = () => {
                 </motion.div>
               )}
             </TabsContent>
+
+            {/* Availability Tab */}
+            <TabsContent value="availability" className="space-y-8">
+              <div>
+                <h2 className="text-2xl font-bold mb-6">Mentor Weekly Availability</h2>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {mentors.map(mentor => (
+                    <div key={mentor.id} className="bg-card p-6 rounded-xl border border-border">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="font-semibold text-lg">{mentor.name}</h3>
+                          <p className="text-sm text-muted-foreground">{mentor.title}</p>
+                        </div>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMentorForAvailability(mentor);
+                            setAvailabilityForm({
+                              selectedDays: [],
+                              start_time: "09:00",
+                              end_time: "17:00"
+                            });
+                          }}
+                        >
+                          Set Schedule
+                        </Button>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Configure recurring weekly slots
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
       </section>
+
+      {/* Availability Editor Dialog */}
+      <Dialog open={!!selectedMentorForAvailability} onOpenChange={() => setSelectedMentorForAvailability(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Set Weekly Availability - {selectedMentorForAvailability?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Define recurring time slots. You can apply the same hours to multiple days.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Days Selection */}
+            <div>
+              <Label>Select Days</Label>
+              <div className="grid grid-cols-7 gap-2 mt-3">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
+                  <Button
+                    key={day}
+                    variant={availabilityForm.selectedDays.includes(index + 1) ? "default" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const days = availabilityForm.selectedDays;
+                      if (days.includes(index + 1)) {
+                        setAvailabilityForm({ ...availabilityForm, selectedDays: days.filter(d => d !== index + 1) });
+                      } else {
+                        setAvailabilityForm({ ...availabilityForm, selectedDays: [...days, index + 1] });
+                      }
+                    }}
+                  >
+                    {day}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5] })}
+                >
+                  Weekdays (Mon–Fri)
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [6,7] })}
+                >
+                  Weekend
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5,6,7] })}
+                >
+                  All Week
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [] })}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+
+            {/* Time Range */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Start Time</Label>
+                <Input 
+                  type="time" 
+                  value={availabilityForm.start_time} 
+                  onChange={e => setAvailabilityForm({...availabilityForm, start_time: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>End Time</Label>
+                <Input 
+                  type="time" 
+                  value={availabilityForm.end_time} 
+                  onChange={e => setAvailabilityForm({...availabilityForm, end_time: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <Button 
+              className="w-full"
+              disabled={availabilityForm.selectedDays.length === 0}
+              onClick={async () => {
+                if (!selectedMentorForAvailability || availabilityForm.selectedDays.length === 0) return;
+
+                try {
+                  const dayNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+                  const requests = availabilityForm.selectedDays.map(dayIndex => {
+                    const dayName = dayNames[dayIndex - 1];
+                    return api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, {
+                      day_of_week: dayName,
+                      start_time: availabilityForm.start_time,
+                      end_time: availabilityForm.end_time
+                    });
+                  });
+
+                  await Promise.all(requests);
+                  toast.success(`Availability set for ${availabilityForm.selectedDays.length} day(s)`);
+                  setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" });
+                } catch (err) {
+                  toast.error("Failed to save availability");
+                }
+              }}
+            >
+              Apply to Selected Days
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* CV Viewer Modal */}
       <Dialog open={cvModalOpen} onOpenChange={setCvModalOpen}>
