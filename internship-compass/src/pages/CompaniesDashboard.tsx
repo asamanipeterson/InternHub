@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"; // Added for Load More button
 import { Building, MapPin, CheckCircle } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 interface Company {
   id: string;
@@ -23,6 +25,7 @@ interface Company {
 const ITEMS_PER_PAGE = 9; // Load 9 companies at a time
 
 const CompaniesDashboard = () => {
+  const navigate = useNavigate();
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [visibleCompanies, setVisibleCompanies] = useState<Company[]>([]);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
@@ -80,6 +83,13 @@ const CompaniesDashboard = () => {
       </section>
 
       <section className="py-12">
+        <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back to Dashboard</span>
+            </button>
         <div className="container mx-auto px-4 lg:px-8">
           {allCompanies.length === 0 ? (
             <div className="text-center py-20">

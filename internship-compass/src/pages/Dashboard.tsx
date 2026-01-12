@@ -91,6 +91,20 @@ interface Booking {
   expires_at?: string | null;
 }
 
+// Type for mentorship bookings (adjust fields based on your actual API response)
+interface MentorBooking {
+  id: string;
+  student_name: string;
+  student_email: string;
+  mentor_name: string;
+  mentor_title: string;
+  scheduled_at: string;
+  amount: number;
+  status: string;
+  zoom_join_url?: string;
+  created_at: string;
+}
+
 const ITEMS_PER_PAGE = 10;
 
 const INDUSTRIES = [
@@ -118,9 +132,12 @@ const itemVariants = {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+
+  // Main data states
   const [companies, setCompanies] = useState<Company[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]); // Internship/company bookings
+  const [mentorBookings, setMentorBookings] = useState<MentorBooking[]>([]); // Only paid mentorship bookings
   const [loading, setLoading] = useState(true);
 
   // Company dialog states
@@ -180,23 +197,25 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [companiesRes, mentorsRes] = await Promise.all([
+        const [companiesRes, mentorsRes, internshipRes, mentorBookingsRes] = await Promise.all([
           api.get("/api/companies"),
           api.get("/api/mentors"),
+          api.get("/api/admin/bookings"),              // Internship bookings (your original)
+          api.get("/api/admin/mentor-bookings"),       // Only PAID mentorship bookings
         ]);
+
         setCompanies(companiesRes.data);
         setMentors(mentorsRes.data);
+        setBookings(internshipRes.data);
+        setMentorBookings(mentorBookingsRes.data);
 
-        try {
-          const bookingsRes = await api.get("/api/admin/bookings");
-          setBookings(bookingsRes.data);
-        } catch (bookingErr) {
-          console.error("Failed to load bookings:", bookingErr);
-          setBookings([]);
-        }
+        // Debug logs - remove later if you want
+        console.log("Fetched internship bookings:", internshipRes.data.length);
+        console.log("Fetched paid mentor bookings:", mentorBookingsRes.data);
+        console.log("Count of paid mentorships:", mentorBookingsRes.data.length);
       } catch (err: any) {
         toast.error("Failed to load dashboard data");
-        console.error(err);
+        console.error("Dashboard fetch error:", err);
       } finally {
         setLoading(false);
       }
@@ -231,23 +250,26 @@ const Dashboard = () => {
   const totalSlots = companies.reduce((acc, c) => acc + c.total_slots, 0);
   const availableSlotsTotal = companies.reduce((acc, c) => acc + c.available_slots, 0);
   const bookedSlots = totalSlots - availableSlotsTotal;
-  const pendingBookings = bookings.filter(b => b.status === 'pending').length;
-  const bookedMentorships = bookings.filter(b => b.status === 'paid').length;
+
+  const pendingInternshipBookings = bookings.filter(b => b.status === 'pending').length;
+
+  // Correct count: only paid mentorship bookings
+  const bookedMentorships = mentorBookings.length;
 
   const refreshData = async () => {
     try {
-      const [companiesRes, mentorsRes] = await Promise.all([
+      const [companiesRes, mentorsRes, internshipRes, mentorBookingsRes] = await Promise.all([
         api.get("/api/companies"),
         api.get("/api/mentors"),
+        api.get("/api/admin/bookings"),
+        api.get("/api/admin/mentor-bookings"),
       ]);
+
       setCompanies(companiesRes.data);
       setMentors(mentorsRes.data);
-      try {
-        const bookingsRes = await api.get("/api/admin/bookings");
-        setBookings(bookingsRes.data);
-      } catch (err) {
-        setBookings([]);
-      }
+      setBookings(internshipRes.data);
+      setMentorBookings(mentorBookingsRes.data);
+
       setVisibleCompanies(ITEMS_PER_PAGE);
       setVisibleMentors(ITEMS_PER_PAGE);
     } catch (err) {
@@ -456,8 +478,8 @@ const Dashboard = () => {
     },
     { 
       icon: Clock, 
-      label: "Pending Review", 
-      value: pendingBookings, 
+      label: "Pending Internships", 
+      value: pendingInternshipBookings, 
       color: "bg-yellow-500",
       onClick: () => navigate("/pending-applications")
     },
@@ -471,11 +493,23 @@ const Dashboard = () => {
     },
     { 
       icon: CalendarIcon, 
-      label: "Booked Mentorships", 
+      label: "Booked Mentorships (Paid)", 
       value: bookedMentorships, 
       color: "bg-purple-500",
-      onClick: () => {}
+      onClick: () => navigate("/admin/mentorship-bookings")
     },
+    // { 
+    //   icon: Clock, 
+    //   label: "Pending Mentorship Payments", 
+    //   value: mentorBookings.filter(b => b.status === 'pending').length, 
+    //   color: "bg-orange-500"
+    // },
+    // { 
+    //   icon: XCircle, 
+    //   label: "Expired Mentorships", 
+    //   value: mentorBookings.filter(b => b.status === 'expired').length, 
+    //   color: "bg-red-500"
+    // },
   ];
 
   const displayedCompanies = companies.slice(0, visibleCompanies);
@@ -530,14 +564,15 @@ const Dashboard = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
+            // className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4"
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3"
           >
             {stats.map((stat) => (
               <motion.div
                 key={stat.label}
                 variants={itemVariants}
                 whileHover={{ scale: stat.onClick ? 1.05 : 1.02 }}
-                className={`bg-card rounded-xl p-6 shadow-elevated border border-border text-center transition-all ${
+                className={`bg-card rounded-xl p-6 mt-18 shadow-elevated border border-border text-center transition-all ${
                   stat.onClick ? "cursor-pointer hover:shadow-xl" : ""
                 }`}
                 onClick={stat.onClick}
@@ -953,7 +988,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
-            {/* Bookings Tab */}
+            {/* Bookings Tab (Internships) */}
             <TabsContent value="bookings" className="space-y-8">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}

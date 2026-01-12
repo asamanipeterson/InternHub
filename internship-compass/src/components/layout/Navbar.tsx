@@ -1,8 +1,9 @@
-// src/components/layout/Navbar.tsx
-import { useState, useEffect } from "react";
+'use client';
+
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, LogOut, Shield } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Menu, X, LogOut, Shield, UserCircle, ChevronDown } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
@@ -17,9 +18,12 @@ const navLinks = [
 ];
 
 export const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);           // mobile menu
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // user dropdown
   const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadUser = () => {
     try {
@@ -39,31 +43,42 @@ export const Navbar = () => {
   useEffect(() => {
     loadUser();
 
-    const handleUpdate = () => {
-      loadUser();
+    const handleUpdate = () => loadUser();
+    window.addEventListener("userUpdated", handleUpdate);
+
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
     };
 
-    window.addEventListener("userUpdated", handleUpdate);
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
       window.removeEventListener("userUpdated", handleUpdate);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
   const isAdmin = user?.user_type?.toString().toLowerCase().trim() === "admin";
   const isLoggedIn = !!user;
+  const isOnAuthPage = location.pathname === "/auth";
 
   const handleLogout = async () => {
     await auth.logout();
     setUser(null);
     setIsOpen(false);
-    window.location.href = "/auth";
+    setIsDropdownOpen(false);
+    navigate("/auth");
   };
 
   const isActive = (href: string) => {
     if (href === "/") return location.pathname === "/";
     return location.pathname.startsWith(href);
   };
+
+  const userName = user?.name || user?.email?.split('@')[0] || "User";
 
   return (
     <motion.nav
@@ -78,6 +93,7 @@ export const Navbar = () => {
             <img src={logo} alt="Student Industry Connect" className="h-10 lg:h-12 w-auto" />
           </Link>
 
+          {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-2">
             {navLinks.map((link) => (
               <Link
@@ -93,42 +109,85 @@ export const Navbar = () => {
                 {link.label}
               </Link>
             ))}
+          </div>
 
-            {/* Dashboard placed in main nav for admins, close to logout */}
-            {isAdmin && (
-              <Link
-                to="/dashboard"
-                className={cn(
-                  "px-4 py-2 rounded-lg font-medium transition-all duration-300 flex items-center",
-                  isActive("/dashboard")
-                    ? "bg-accent text-accent-foreground"
-                    : "text-foreground/80 hover:text-foreground hover:bg-primary/10"
-                )}
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Dashboard
+          {/* Desktop Right Side */}
+          <div className="hidden lg:flex items-center gap-4">
+            {!isLoggedIn && !isOnAuthPage && (
+              <Link to="/auth">
+                <Button variant="accent">Get Started</Button>
               </Link>
+            )}
+
+            {isLoggedIn && (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary/80 transition-colors"
+                >
+                  <UserCircle className="h-8 w-8 text-primary" />
+                  <span className="font-medium text-sm hidden md:block">
+                    {userName}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      isDropdownOpen ? "rotate-180" : ""
+                    )}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                <AnimatePresence>
+                  {isDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-3 w-56 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50"
+                    >
+                      <div className="py-2">
+                        {/* Username header */}
+                        <div className="px-4 py-3 border-b border-border">
+                          <p className="font-medium">{userName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {isAdmin ? "Administrator" : "Student"}
+                          </p>
+                        </div>
+
+                        {/* Admin: Dashboard */}
+                        {isAdmin && (
+                          <Link
+                            to="/dashboard"
+                            className="flex items-center px-4 py-3 hover:bg-secondary transition-colors"
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <Shield className="h-5 w-5 mr-3 text-primary" />
+                            <span>Dashboard</span>
+                          </Link>
+                        )}
+
+                        {/* Logout */}
+                        <button
+                          onClick={() => {
+                            handleLogout();
+                            setIsDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center px-4 py-3 hover:bg-destructive/10 transition-colors text-destructive"
+                        >
+                          <LogOut className="h-5 w-5 mr-3" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </div>
 
-          {/* Right side: Logout (and Get Started for non-admins) */}
-          <div className="hidden lg:flex items-center gap-3">
-            {isAdmin && (
-              <Button variant="destructive" size="default" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            )}
-
-            {(!isLoggedIn || !isAdmin) && (
-              <Link to="/internships">
-                <Button variant="accent">
-                  Get Started
-                </Button>
-              </Link>
-            )}
-          </div>
-
+          {/* Mobile Menu Toggle */}
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="lg:hidden p-2 text-foreground hover:bg-secondary rounded-lg transition-colors"
@@ -138,6 +197,7 @@ export const Navbar = () => {
         </div>
       </div>
 
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -147,7 +207,7 @@ export const Navbar = () => {
             transition={{ duration: 0.3 }}
             className="lg:hidden glass border-t border-border"
           >
-            <div className="container mx-auto px-4 py-4 space-y-2">
+            <div className="container mx-auto px-4 py-6 space-y-4">
               {navLinks.map((link, index) => (
                 <motion.div
                   key={link.label}
@@ -158,10 +218,10 @@ export const Navbar = () => {
                   <Link
                     to={link.href}
                     className={cn(
-                      "block font-medium py-2 px-4 rounded-lg transition-all duration-300",
+                      "block font-medium py-3 px-4 rounded-lg transition-all",
                       isActive(link.href)
                         ? "bg-accent text-accent-foreground"
-                        : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+                        : "hover:bg-secondary"
                     )}
                     onClick={() => setIsOpen(false)}
                   >
@@ -170,42 +230,49 @@ export const Navbar = () => {
                 </motion.div>
               ))}
 
-              {isAdmin && (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: navLinks.length * 0.1 }}
-                >
-                  <Link
-                    to="/dashboard"
-                    className={cn(
-                      "block font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center",
-                      isActive("/dashboard")
-                        ? "bg-accent text-accent-foreground"
-                        : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+              {/* Mobile Auth Controls */}
+              <div className="pt-6 space-y-4 border-t border-border">
+                {isLoggedIn ? (
+                  <>
+                    {/* User Info */}
+                    <div className="px-4 py-3 bg-secondary/50 rounded-lg">
+                      <p className="font-medium">{userName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {isAdmin ? "Administrator" : "Student"}
+                      </p>
+                    </div>
+
+                    {/* Admin: Dashboard */}
+                    {isAdmin && (
+                      <Link to="/dashboard" onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="w-full">
+                          <Shield className="w-4 h-4 mr-2" />
+                          Dashboard
+                        </Button>
+                      </Link>
                     )}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Shield className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </Link>
-                </motion.div>
-              )}
 
-              <div className="pt-4 space-y-3 border-t border-border">
-                {isAdmin && (
-                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </Button>
-                )}
-
-                {(!isLoggedIn || !isAdmin) && (
-                  <Link to="/internships" onClick={() => setIsOpen(false)}>
-                    <Button variant="accent" className="w-full">
-                      Get Started
+                    {/* Logout */}
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => {
+                        handleLogout();
+                        setIsOpen(false);
+                      }}
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
                     </Button>
-                  </Link>
+                  </>
+                ) : (
+                  !isOnAuthPage && (
+                    <Link to="/auth" onClick={() => setIsOpen(false)}>
+                      <Button variant="accent" className="w-full">
+                        Get Started
+                      </Button>
+                    </Link>
+                  )
                 )}
               </div>
             </div>

@@ -12,6 +12,10 @@ class MentorBooking extends Model
         'student_name',
         'student_email',
         'student_phone',
+        'age',
+        'student_university',
+        'student_course',
+        'student_level',
         'scheduled_at',
         'paystack_reference',
         'amount',
@@ -19,11 +23,22 @@ class MentorBooking extends Model
         'zoom_meeting_id',
         'zoom_join_url',
         'zoom_start_url',
-        'status'
+        'status',
+        'payment_expires_at',
+    ];
+
+    protected $dates = [
+        'scheduled_at',
+        'payment_expires_at',
     ];
 
     public function mentor()
     {
         return $this->belongsTo(Mentor::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

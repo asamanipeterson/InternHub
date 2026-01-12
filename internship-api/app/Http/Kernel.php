@@ -12,6 +12,7 @@ class Kernel extends HttpKernel
      * These middleware are run during every request to your application.
      */
     protected $middleware = [
+        \Illuminate\Http\Middleware\HandleCors::class,
         // \Illuminate\Session\Middleware\StartSession::class,  // Removed from global
         \Illuminate\View\Middleware\ShareErrorsFromSession::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,

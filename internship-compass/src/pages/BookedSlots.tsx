@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +40,7 @@ interface Booking {
 }
 
 const BookedSlots = () => {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cvModalOpen, setCvModalOpen] = useState(false);
@@ -104,6 +107,13 @@ const BookedSlots = () => {
       </section>
 
       <section className="py-12">
+        <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back to Dashboard</span>
+            </button>
         <div className="container mx-auto px-4 lg:px-8">
           {bookings.length === 0 ? (
             <motion.div

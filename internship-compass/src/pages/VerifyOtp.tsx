@@ -1,0 +1,186 @@
+// src/pages/VerifyOtp.tsx
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import api from "@/lib/api";
+
+const VerifyOtp = () => {
+  const navigate = useNavigate();
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [timeLeft, setTimeLeft] = useState(60); // 30 seconds
+  const [canResend, setCanResend] = useState(false);
+  const inputRefs = useRef<HTMLInputElement[]>([]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Auto-focus first input on mount
+    inputRefs.current[0]?.focus();
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleChange = (index: number, value: string) => {
+    if (value.length > 1 || !/^\d?$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits are filled
+    if (newOtp.every((d) => d !== "") && newOtp.join("").length === 6) {
+      verifyOtp(newOtp.join(""));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (pasted.length > 0) {
+      const digits = pasted.split("");
+      setOtp([...digits, ...Array(6 - digits.length).fill("")]);
+      if (digits.length === 6) {
+        verifyOtp(digits.join(""));
+      }
+    }
+  };
+
+  const verifyOtp = async (code: string) => {
+    try {
+      // CRITICAL: Refresh CSRF cookie BEFORE the POST
+      await api.get("/sanctum/csrf-cookie");
+
+      const res = await api.post("/api/verify-otp", { otp: code });
+      const { user, token } = res.data;
+
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("token", token);
+      window.dispatchEvent(new Event("userUpdated"));
+
+      toast.success(`Login successful! ${user.name}.`);
+      navigate(user.user_type?.toLowerCase() === "admin" ? "/dashboard" : "/");
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Invalid or expired code";
+      toast.error(message);
+      // If session expired, redirect back to login
+      if (message.includes("Session expired")) {
+        navigate("/auth");
+      }
+    }
+  };
+
+  const resendOtp = async () => {
+    try {
+      // CRITICAL: Refresh CSRF cookie BEFORE the POST
+      await api.get("/sanctum/csrf-cookie");
+
+      await api.post("/api/resend-otp");
+      toast.success("New code sent!");
+      setTimeLeft(60);
+      setCanResend(false);
+      setOtp(["", "", "", "", "", ""]);
+      inputRefs.current[0]?.focus();
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Failed to resend";
+      toast.error(message);
+      // If session expired here too, go back to login
+      if (message.includes("Session expired")) {
+        navigate("/auth");
+      }
+    }
+  };
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-xl bg-card rounded-2xl shadow-elevated border border-border overflow-hidden"
+      >
+        <div className="gradient-hero p-8 text-center">
+          <h1 className="text-2xl font-bold text-primary-foreground">Verify Your Email</h1>
+          <p className="text-primary-foreground/80 mt-2">
+            Enter the 6-digit code sent to your email
+          </p>
+        </div>
+
+        <div className="p-10 space-y-8">
+          {/* OTP Inputs */}
+          <div className="flex justify-center gap-4">
+            {otp.map((digit, index) => (
+              <Input
+                key={index}
+                type="text"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, index)}
+                onPaste={handlePaste}
+                ref={(el) => {
+                  if (el) inputRefs.current[index] = el;
+                }}
+                className="text-center text-3xl font-bold h-16 w-16 bg-secondary/50 border-border focus:border-primary"
+              />
+            ))}
+          </div>
+
+          {/* Timer */}
+          <div className="text-center text-sm text-muted-foreground">
+            Code expires in{" "}
+            <span className="font-medium text-primary">
+              {seconds.toString().padStart(2, "0")}
+            </span>{" "}
+            seconds
+          </div>
+
+          {/* Verify Button */}
+          <Button
+            onClick={() => verifyOtp(otp.join(""))}
+            className="w-full h-12 text-base font-semibold"
+            disabled={otp.join("").length !== 6}
+          >
+            Verify Code
+          </Button>
+
+          {/* Resend */}
+          <Button
+            variant="outline"
+            className="w-full h-12"
+            onClick={resendOtp}
+            disabled={!canResend}
+          >
+            {canResend ? "Resend OTP" : `Resend in ${seconds.toString().padStart(2, "0")}s`}
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+export default VerifyOtp;

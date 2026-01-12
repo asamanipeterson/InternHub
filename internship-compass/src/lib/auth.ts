@@ -11,54 +11,106 @@ export interface RegisterData {
   email: string;
   password: string;
   password_confirmation: string;
+  university: string;
+  course: string;
+  year: string;
+  phone: string;
+  nationality: string;
 }
 
-// No token management needed — Sanctum uses session cookie
-
+// ───────────────────────────────────────────────
+// Helper - get CSRF cookie before state-changing requests
+// ───────────────────────────────────────────────
 const ensureCsrfCookie = async () => {
   try {
     await api.get("/sanctum/csrf-cookie");
-  } catch (error) {
-    console.warn("CSRF cookie fetch failed or already set");
+  } catch (err) {
+    console.warn("CSRF cookie request failed (might already exist)", err);
   }
 };
 
+// ───────────────────────────────────────────────
+// Register – full student data
+// ───────────────────────────────────────────────
 export const register = async (data: RegisterData) => {
   await ensureCsrfCookie();
   const res = await api.post("/api/register", data);
-  return res.data; // Sanctum returns the user object directly
+  return res.data; // usually returns user object
 };
 
+// ───────────────────────────────────────────────
+// Login
+// ───────────────────────────────────────────────
 export const login = async (data: LoginData) => {
   await ensureCsrfCookie();
   const res = await api.post("/api/login", data);
-  return res.data; // Sanctum returns the user object directly
+  return res.data; // user object
 };
 
+// ───────────────────────────────────────────────
+// Logout – just hit the endpoint, cookie will be cleared by Laravel
+// ───────────────────────────────────────────────
 export const logout = async () => {
   try {
-    // This will now work because our interceptor attaches the Bearer token
     await api.post("/api/logout");
-  } catch (error) {
-    console.warn("Logout failed on server", error);
+  } catch (err) {
+    console.warn("Server logout failed", err);
   } finally {
+    // Clear local client-side state only
     localStorage.removeItem("user");
-    localStorage.removeItem("token"); // Clear token
     window.dispatchEvent(new Event("userUpdated"));
   }
 };
+
+// ───────────────────────────────────────────────
+// Get current user (cookie-based → no token needed)
+// ───────────────────────────────────────────────
 export const getMe = async () => {
   const res = await api.get("/api/user");
   return res.data;
 };
 
+
+export const verifyOtp = async (otp: string) => {
+  await ensureCsrfCookie();  // ← Add this line
+  const res = await api.post("/api/verify-otp", { otp });
+  return res.data;
+};
+
+export const resendOtp = async () => {
+  await ensureCsrfCookie();  // ← Add this line
+  const res = await api.post("/api/resend-otp");
+  return res.data;
+};
+
+export const forgotPassword = async (email: string) => {
+  await ensureCsrfCookie();
+  const res = await api.post("/api/forgot-password", { email });
+  return res.data;
+};
+
+export const resetPassword = async (data: any) => {
+  await ensureCsrfCookie();
+  const res = await api.post("/api/reset-password", data);
+  return res.data;
+};
+// ───────────────────────────────────────────────
+// Simple auth check based on local user cache
+// (real check should be done via getMe() when needed)
+// ───────────────────────────────────────────────
 export const isAuthenticated = (): boolean => {
-  // With Sanctum stateful, we can rely on the cookie, but we use localStorage user as indicator
   return !!localStorage.getItem("user");
 };
 
-export const initAuth = () => {
-  // No manual header setup needed for stateful Sanctum
+// Optional: call on app init / after login
+export const initAuth = async () => {
+  try {
+    const user = await getMe();
+    localStorage.setItem("user", JSON.stringify(user));
+    window.dispatchEvent(new Event("userUpdated"));
+  } catch {
+    localStorage.removeItem("user");
+  }
 };
 
 export default {

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { User, Star } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -20,6 +22,7 @@ interface Mentor {
 }
 
 const MentorsDashboard = () => {
+  const navigate = useNavigate();
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +56,14 @@ const MentorsDashboard = () => {
 
       <section className="py-12">
         <div className="container mx-auto px-4 lg:px-8">
+
+          <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back to Dashboard</span> 
+            </button>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {mentors.map((mentor) => (
               <motion.div

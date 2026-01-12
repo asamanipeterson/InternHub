@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -119,10 +119,15 @@ const Mentorship = () => {
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+
   const [formData, setFormData] = useState({
     student_name: "",
     student_email: "",
     student_phone: "",
+    student_age: "",
+    student_university: "",
+    student_course: "",
+    student_level: "",
     scheduled_at: ""
   });
 
@@ -153,14 +158,29 @@ const Mentorship = () => {
     setSelectedMentor(mentor);
     setSelectedDate("");
     setAvailableTimes([]);
-    setFormData({ student_name: "", student_email: "", student_phone: "", scheduled_at: "" });
+    setFormData({
+      student_name: "",
+      student_email: "",
+      student_phone: "",
+      student_age: "",
+      student_university: "",
+      student_course: "",
+      student_level: "",
+      scheduled_at: ""
+    });
     setOpen(true);
   };
 
   const handleSubmitBooking = async () => {
     if (!selectedMentor) return;
 
-    if (!formData.student_name || !formData.student_email || !formData.scheduled_at) {
+    if (!formData.student_name ||
+        !formData.student_email ||
+        !formData.student_age ||
+        !formData.student_university ||
+        !formData.student_course ||
+        !formData.student_level ||
+        !formData.scheduled_at) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -170,12 +190,16 @@ const Mentorship = () => {
         mentor_id: selectedMentor.id,
         student_name: formData.student_name,
         student_email: formData.student_email,
-        student_phone: formData.student_phone,
+        student_phone: formData.student_phone || null,
+        student_age: formData.student_age,
+        student_university: formData.student_university,
+        student_course: formData.student_course,
+        student_level: formData.student_level,
         scheduled_at: formData.scheduled_at
       });
 
       if (response.data.success) {
-        toast.success("Redirecting to payment...");
+        toast.success(`Redirecting to payment... You have 24 hours to complete.`);
         window.location.href = response.data.authorization_url;
       }
     } catch (err: any) {
@@ -367,7 +391,7 @@ const Mentorship = () => {
                       whileHover={{ y: -10, scale: 1.02 }}
                       className="group"
                     >
-                      <div 
+                      <div
                         className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
                         onClick={() => goToProfile(mentor)}
                       >
@@ -566,7 +590,7 @@ const Mentorship = () => {
         </>
       )}
 
-      {/* Booking Dialog with Calendar Picker */}
+      {/* Booking Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -575,6 +599,7 @@ const Mentorship = () => {
               Session fee: <strong>GHS {(Number(selectedMentor?.session_price) || 0).toFixed(2)}</strong>
             </DialogDescription>
           </DialogHeader>
+
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -585,6 +610,7 @@ const Mentorship = () => {
                 placeholder="John Doe"
               />
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="email">Email *</Label>
               <Input
@@ -595,6 +621,50 @@ const Mentorship = () => {
                 placeholder="john@example.com"
               />
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="age">Age *</Label>
+              <Input
+                id="age"
+                type="number"
+                value={formData.student_age}
+                onChange={(e) => setFormData({ ...formData, student_age: e.target.value })}
+                placeholder="22"
+                min="13"
+                max="120"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="university">University *</Label>
+              <Input
+                id="university"
+                value={formData.student_university}
+                onChange={(e) => setFormData({ ...formData, student_university: e.target.value })}
+                placeholder="University of Ghana"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="course">Programme / Course *</Label>
+              <Input
+                id="course"
+                value={formData.student_course}
+                onChange={(e) => setFormData({ ...formData, student_course: e.target.value })}
+                placeholder="Computer Science"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="level">Level / Year *</Label>
+              <Input
+                id="level"
+                value={formData.student_level}
+                onChange={(e) => setFormData({ ...formData, student_level: e.target.value })}
+                placeholder="Level 400 / Final Year"
+              />
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
               <Input
@@ -607,8 +677,8 @@ const Mentorship = () => {
 
             <div className="grid gap-2">
               <Label>Preferred Date *</Label>
-              <Input 
-                type="date" 
+              <Input
+                type="date"
                 min={new Date().toISOString().split('T')[0]}
                 value={selectedDate}
                 onChange={async (e) => {
@@ -632,7 +702,7 @@ const Mentorship = () => {
               <div className="grid gap-2">
                 <Label>Available Time *</Label>
                 {availableTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                     {availableTimes.map(time => (
                       <Button
                         key={time}
@@ -645,19 +715,20 @@ const Mentorship = () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center">
+                  <p className="text-sm text-muted-foreground text-center py-2">
                     No available time slots on this date
                   </p>
                 )}
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-3">
+
+          <div className="flex justify-end gap-3 mt-2">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="accent" 
+            <Button
+              variant="accent"
               onClick={handleSubmitBooking}
               disabled={!formData.scheduled_at}
             >

@@ -1,5 +1,6 @@
+// src/pages/Auth.tsx
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -13,6 +14,11 @@ import {
   Lock,
   Mail,
   User,
+  School,
+  BookOpen,
+  Calendar,
+  Phone,
+  Globe,
   ArrowRight,
   Loader2,
 } from "lucide-react";
@@ -28,6 +34,7 @@ import {
 } from "@/schemas/validation";
 
 import { login, register } from "@/lib/auth";
+import PasswordStrength from "@/components/PasswordStrength";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -41,22 +48,37 @@ const Auth = () => {
 
   const registerForm = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { name: "", email: "", password: "", password_confirmation: "" },
+    defaultValues: {
+      name: "",
+      university: "",
+      course: "",
+      year: "",
+      email: "",
+      phone: "",
+      nationality: "",
+      password: "",
+      password_confirmation: "",
+    },
   });
 
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (response) => {
-      // Laravel Controller returns: { user: {...}, token: "..." }
+      // ── NEW OTP FLOW HANDLING ──
+      if (response.redirect) {
+        // Server told us to go to OTP page (after sending code)
+        toast.success(response.message || "OTP sent! Check your email.");
+        navigate(response.redirect); // ← React navigates to /verify-otp
+        return;
+      }
+
+      // Fallback: direct login (if OTP is disabled in future)
       const user = response?.user;
       const token = response?.token;
 
       if (user && token) {
-        // Store both user data and the token
         localStorage.setItem("user", JSON.stringify(user));
-        localStorage.setItem("token", token); 
-        
-        // Trigger event so Navbar updates immediately
+        localStorage.setItem("token", token);
         window.dispatchEvent(new Event("userUpdated"));
 
         const userType = user.user_type?.toString().toLowerCase().trim();
@@ -65,11 +87,10 @@ const Auth = () => {
           toast.success(`Welcome back, Admin ${user.name}!`);
           navigate("/dashboard", { replace: true });
         } else {
-          toast.success("Login successful!");
-          navigate("*", { replace: true });
+          toast.success(`Welcome, ${user.name}!`);
+          navigate("/", { replace: true });
         }
       } else {
-        console.error("Malformed response from server", response);
         toast.error("Login successful, but user data is missing.");
       }
     },
@@ -82,15 +103,23 @@ const Auth = () => {
     mutationFn: register,
     onSuccess: () => {
       toast.success("Account created successfully! Please sign in to continue.");
-      // Redirect user to Login view
       setIsLogin(true);
       registerForm.reset();
-      loginForm.setValue("email", registerForm.getValues("email"));
+      loginForm.setValue("email", registerForm.getValues("email") || "");
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Registration failed");
     },
   });
+
+  const passwordValue = registerForm.watch("password") || "";
+
+  const toggleForm = () => {
+    setShowPassword(false);
+    setIsLogin(!isLogin);
+    loginForm.reset();
+    registerForm.reset();
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,29 +127,29 @@ const Auth = () => {
 
       <section className="pt-24 lg:pt-32 pb-16 min-h-screen flex items-center">
         <div className="container mx-auto px-4 lg:px-8">
-          <div className="max-w-md mx-auto">
+          <div className="max-w-xl mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
+              transition={{ duration: 0.5 }}
               className="bg-card rounded-2xl shadow-elevated border border-border overflow-hidden"
             >
               <div className="gradient-hero p-8 text-center">
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                  transition={{ delay: 0.1, type: "spring", stiffness: 300, damping: 20 }}
                   className="w-16 h-16 bg-background/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4"
                 >
                   <Lock className="h-8 w-8 text-primary-foreground" />
                 </motion.div>
                 <h1 className="text-2xl font-bold text-primary-foreground">
-                  {isLogin ? "Sign In" : "Create Account"}
+                  {isLogin ? "Sign In" : "Create Student Account"}
                 </h1>
                 <p className="text-primary-foreground/80 mt-2">
                   {isLogin
                     ? "Access your dashboard and applications"
-                    : "Join our platform to start your journey"}
+                    : "Join our community of students"}
                 </p>
               </div>
 
@@ -134,103 +163,211 @@ const Auth = () => {
                           email: data.email,
                           password: data.password,
                           password_confirmation: data.password_confirmation,
+                          university: data.university,
+                          course: data.course,
+                          year: data.year,
+                          phone: data.phone,
+                          nationality: data.nationality,
                         })
                       )
                 }
-                className="p-8 space-y-6"
+                className="p-10 space-y-6"
               >
-                {!isLogin && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} transition={{ duration: 0.3 }}>
-                    <Label htmlFor="name">Full Name</Label>
-                    <div className="relative mt-2">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                      <Input
-                        id="name"
-                        type="text"
-                        placeholder="John Doe"
-                        {...registerForm.register("name")}
-                        className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
-                      />
-                      {registerForm.formState.errors.name && (
-                        <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.name.message}</p>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={isLogin ? "login" : "register"}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="space-y-6"
+                  >
+                    {/* Conditional register-only fields */}
+                    {!isLogin && (
+                      <>
+                        <div>
+                          <Label htmlFor="name">Full Name <span className="text-red-600" aria-hidden="true">*</span></Label>
+                          <div className="relative mt-2">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                            <Input
+                              id="name"
+                              type="text"
+                              placeholder="John Doe"
+                              {...registerForm.register("name")}
+                              className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                            />
+                          </div>
+                          {registerForm.formState.errors.name && (
+                            <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.name.message}</p>
+                          )}
+                        </div>
 
-                <div>
-                  <Label htmlFor="email">Email Address</Label>
-                  <div className="relative mt-2">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="admin@example.com"
-                      {...(isLogin ? loginForm.register("email") : registerForm.register("email"))}
-                      className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
-                    />
-                    {(isLogin ? loginForm.formState.errors.email : registerForm.formState.errors.email) && (
-                      <p className="text-sm text-destructive mt-1">
-                        {(isLogin ? loginForm.formState.errors.email?.message : registerForm.formState.errors.email?.message)}
-                      </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <Label htmlFor="university">University <span className="text-red-600" aria-hidden="true">*</span></Label>
+                            <div className="relative mt-2">
+                              <School className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                              <Input
+                                id="university"
+                                placeholder="University of Ghana"
+                                {...registerForm.register("university")}
+                                className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                              />
+                            </div>
+                            {registerForm.formState.errors.university && (
+                              <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.university.message}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <Label htmlFor="course">Course <span className="text-red-600" aria-hidden="true">*</span></Label>
+                            <div className="relative mt-2">
+                              <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                              <Input
+                                id="course"
+                                placeholder="Computer Science"
+                                {...registerForm.register("course")}
+                                className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                              />
+                            </div>
+                            {registerForm.formState.errors.course && (
+                              <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.course.message}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <Label htmlFor="year">Year / Level <span className="text-red-600" aria-hidden="true">*</span></Label>
+                            <div className="relative mt-2">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                              <Input
+                                id="year"
+                                placeholder="Level 200"
+                                {...registerForm.register("year")}
+                                className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                              />
+                            </div>
+                            {registerForm.formState.errors.year && (
+                              <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.year.message}</p>
+                            )}
+                          </div>
+ 
+                          <div>
+                            <Label htmlFor="phone">Phone Number <span className="text-red-600" aria-hidden="true">*</span></Label>
+                            <div className="relative mt-2">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                              <Input
+                                id="phone"
+                                placeholder="+233 24 123 4567"
+                                {...registerForm.register("phone")}
+                                className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                              />
+                            </div>
+                            {registerForm.formState.errors.phone && (
+                              <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.phone.message}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="nationality">Nationality <span className="text-red-600" aria-hidden="true">*</span></Label>
+                          <div className="relative mt-2">
+                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                            <Input
+                              id="nationality"
+                              placeholder="Ghanaian"
+                              {...registerForm.register("nationality")}
+                              className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                            />
+                          </div>
+                          {registerForm.formState.errors.nationality && (
+                            <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.nationality.message}</p>
+                          )}
+                        </div>
+                      </>
                     )}
-                  </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative mt-2">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      {...(isLogin ? loginForm.register("password") : registerForm.register("password"))}
-                      className="pl-10 pr-12 h-12 bg-secondary/50 border-border focus:border-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                    {(isLogin ? loginForm.formState.errors.password : registerForm.formState.errors.password) && (
-                      <p className="text-sm text-destructive mt-1">
-                        {(isLogin ? loginForm.formState.errors.password?.message : registerForm.formState.errors.password?.message)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {!isLogin && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} transition={{ duration: 0.3 }}>
-                    <Label htmlFor="password_confirmation">Confirm Password</Label>
-                    <div className="relative mt-2">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                      <Input
-                        id="password_confirmation"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        {...registerForm.register("password_confirmation")}
-                        className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
-                      />
-                      {registerForm.formState.errors.password_confirmation && (
+                    {/* Common fields */}
+                    <div>
+                      <Label htmlFor="email">Email Address <span className="text-red-600" aria-hidden="true">*</span></Label>
+                      <div className="relative mt-2">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="student@university.edu.gh"
+                          {...(isLogin ? loginForm.register("email") : registerForm.register("email"))}
+                          className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                        />
+                      </div>
+                      {(isLogin ? loginForm.formState.errors.email : registerForm.formState.errors.email) && (
                         <p className="text-sm text-destructive mt-1">
-                          {registerForm.formState.errors.password_confirmation.message}
+                          {(isLogin ? loginForm.formState.errors.email?.message : registerForm.formState.errors.email?.message)}
                         </p>
                       )}
                     </div>
-                  </motion.div>
-                )}
 
-                {isLogin && (
-                  <div className="flex items-center justify-end">
-                    <button type="button" className="text-sm text-primary hover:text-primary/80 transition-colors">
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
+                    <div>
+                      <Label htmlFor="password">Password <span className="text-red-600" aria-hidden="true">*</span></Label>
+                      <div className="relative mt-2">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          {...(isLogin ? loginForm.register("password") : registerForm.register("password"))}
+                          className="pl-10 pr-12 h-12 bg-secondary/50 border-border focus:border-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
+
+                      {!isLogin && <PasswordStrength password={passwordValue} />}
+
+                      {(isLogin ? loginForm.formState.errors.password : registerForm.formState.errors.password) && (
+                        <p className="text-sm text-destructive mt-1">
+                          {(isLogin ? loginForm.formState.errors.password?.message : registerForm.formState.errors.password?.message)}
+                        </p>
+                      )}
+                    </div>
+
+                    {!isLogin && (
+                      <div>
+                        <Label htmlFor="password_confirmation">Confirm Password <span className="text-red-600" aria-hidden="true">*</span></Label>
+                        <div className="relative mt-2">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                          <Input
+                            id="password_confirmation"
+                            type={showPassword ? "text" : "password"}
+                            placeholder="••••••••"
+                            {...registerForm.register("password_confirmation")}
+                            className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                          />
+                        </div>
+                        {registerForm.formState.errors.password_confirmation && (
+                          <p className="text-sm text-destructive mt-1">
+                            {registerForm.formState.errors.password_confirmation.message}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {isLogin && (
+                      <div className="flex items-center justify-end">
+                        <Link 
+                            to="/forgot-password" 
+                            className="text-sm text-primary hover:text-primary/80 transition-colors"
+                          >
+                            Forgot password?
+                          </Link>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
 
                 <Button
                   type="submit"
@@ -267,11 +404,7 @@ const Auth = () => {
                   type="button"
                   variant="outline"
                   className="w-full h-12"
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    loginForm.reset();
-                    registerForm.reset();
-                  }}
+                  onClick={toggleForm}
                 >
                   {isLogin ? "Create an account" : "Sign in instead"}
                 </Button>
@@ -281,7 +414,7 @@ const Auth = () => {
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
               className="text-center text-muted-foreground mt-6 text-sm"
             >
               By continuing, you agree to our{" "}

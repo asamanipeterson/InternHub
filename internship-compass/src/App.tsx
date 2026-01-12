@@ -27,6 +27,10 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import MentorProfile from "./pages/MentorProfile";
 import ProtectedRoute from "./components/ProtectedRoute";
+import BookedMentorship from "./pages/BookedMentorship";
+import AdminMentorshipBookings from "./pages/AdminMentorshipBookings";
+import VerifyOtp from "./pages/VerifyOtp";
+import ForgotPassword from "./pages/ForgotPassword";
 
 const queryClient = new QueryClient();
 
@@ -37,29 +41,36 @@ const App = () => (
       
       {/* Custom Styled Sonner Toasts */}
       <Sonner
-        position="top-right"
-        closeButton
-        richColors
-        expand={false}
-        duration={4000}
-        toastOptions={{
-          classNames: {
-            toast:
-              "group toast flex items-center gap-4 rounded-xl shadow-2xl border-0 px-6 py-4 min-w-[340px] backdrop-blur-md animate-in slide-in-from-right-full duration-500",
-            title: "font-bold text-md",
-            description: "text-sm opacity-90 mt-1",
-            success: "bg-green-600 text-white border-green-700",
-            error: "bg-red-600 text-white border-red-700",
-            info: "bg-blue-600 text-white",
-            warning: "bg-amber-600 text-white",
-            closeButton:
-              "bg-white/20 hover:bg-white/30 text-white border-0 rounded-full w-8 h-8",
-            actionButton: "bg-white text-green-600 hover:bg-gray-100 font-medium",
-            cancelButton: "bg-transparent text-white/70 hover:text-white",
-          },
-        }}
-      />
+  position="top-center"
+  closeButton
+  richColors
+  expand={false}
+  duration={10000}           // ← default duration for all toasts
+  visibleToasts={1}         // ← usually enough when centered
+  toastOptions={{
+    // Global duration override (will be used if not specified per toast)
+    duration: 15000,
 
+    classNames: {
+      toast:
+        "group toast flex items-center gap-5 rounded-2xl shadow-2xl border-0 px-7 py-5 min-w-[380px] max-w-[90vw] md:min-w-[420px] backdrop-blur-xl text-base",
+
+      title:    "font-semibold text-lg leading-tight",
+      description: "text-base opacity-90 mt-1.5 leading-relaxed",
+
+      icon:     "text-2xl",           // bigger icon
+      loader:   "scale-125",          // bigger loading spinner
+
+      closeButton:
+        "absolute right-3 top-3.5 bg-white/15 hover:bg-white/25 text-white border-0 rounded-full w-9 h-9 flex items-center justify-center transition-colors",
+
+      success: "bg-emerald-700/95 border-emerald-600/70 text-white",
+      error:   "bg-red-700/95 border-red-600/70 text-white",
+      warning: "bg-amber-700/95 border-amber-600/70 text-white",
+      info:    "bg-blue-700/95 border-blue-600/70 text-white",
+    }
+  }}
+/>
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
@@ -77,6 +88,10 @@ const App = () => (
           <Route path="/interview-prep" element={<InterviewPrep />} />
           <Route path="/careers" element={<Careers />} />
           <Route path="/partner-with-us" element={<PartnerWithUs />} />
+           <Route path="/mentorship/booked" element={<BookedMentorship />} />
+           <Route path="/verify-otp" element={<VerifyOtp />} />
+           <Route path="/forgot-password" element={<ForgotPassword />} />
+          
 
           {/* Auth Page */}
           <Route path="/auth" element={<Auth />} />
@@ -88,6 +103,7 @@ const App = () => (
             <Route path="/companies-dashboard" element={<CompaniesDashboard />} />
             <Route path="/pending-applications" element={<PendingApplications />} />
             <Route path="/mentors-dashboard" element={<MentorsDashboard />} />
+            <Route path="/admin/mentorship-bookings" element={<AdminMentorshipBookings />} />
           </Route>
 
           {/* Catch-all 404 */}

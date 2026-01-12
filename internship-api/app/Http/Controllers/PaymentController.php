@@ -65,6 +65,7 @@ class PaymentController extends Controller
             Mail::to($booking->student_email)->send(new PaymentSuccessMail($booking));
 
             Log::info("Payment successful for Booking ID: {$booking->id}");
+            Log::info('Paystack Webhook Event', ['event' => $event['event'], 'reference' => $data['reference'] ?? null]);
         }
 
         return response()->json(['message' => 'Webhook handled'], 200);

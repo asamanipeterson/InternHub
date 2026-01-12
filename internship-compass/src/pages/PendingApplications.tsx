@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Clock, CheckCircle, XCircle, FileText, Download } from "lucide-react";
 import {
@@ -27,6 +29,7 @@ interface Booking {
 }
 
 const PendingApplications = () => {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [cvModalOpen, setCvModalOpen] = useState(false);
@@ -62,6 +65,7 @@ const PendingApplications = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
+        
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-primary-foreground mb-4">
             Pending Applications
@@ -71,6 +75,13 @@ const PendingApplications = () => {
       </section>
 
       <section className="py-12">
+        <button
+              onClick={() => navigate("/dashboard")}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Back to Dashboard</span>
+            </button>
         <div className="container mx-auto px-4 lg:px-8">
           {bookings.length === 0 ? (
             <div className="text-center py-20">

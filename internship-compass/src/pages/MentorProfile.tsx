@@ -37,7 +37,6 @@ const MentorProfile = () => {
   const [mentor, setMentor] = useState<Mentor | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Booking Dialog State
   const [open, setOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -45,6 +44,10 @@ const MentorProfile = () => {
     student_name: "",
     student_email: "",
     student_phone: "",
+    student_age: "",
+    student_university: "",
+    student_course: "",
+    student_level: "",
     scheduled_at: ""
   });
 
@@ -71,14 +74,29 @@ const MentorProfile = () => {
     if (!mentor) return;
     setSelectedDate("");
     setAvailableTimes([]);
-    setFormData({ student_name: "", student_email: "", student_phone: "", scheduled_at: "" });
+    setFormData({
+      student_name: "",
+      student_email: "",
+      student_phone: "",
+      student_age: "",
+      student_university: "",
+      student_course: "",
+      student_level: "",
+      scheduled_at: ""
+    });
     setOpen(true);
   };
 
   const handleSubmitBooking = async () => {
     if (!mentor) return;
 
-    if (!formData.student_name || !formData.student_email || !formData.scheduled_at) {
+    if (!formData.student_name ||
+        !formData.student_email ||
+        !formData.student_age ||
+        !formData.student_university ||
+        !formData.student_course ||
+        !formData.student_level ||
+        !formData.scheduled_at) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -88,7 +106,11 @@ const MentorProfile = () => {
         mentor_id: mentor.id,
         student_name: formData.student_name,
         student_email: formData.student_email,
-        student_phone: formData.student_phone,
+        student_phone: formData.student_phone || null,
+        student_age: formData.student_age,
+        student_university: formData.student_university,
+        student_course: formData.student_course,
+        student_level: formData.student_level,
         scheduled_at: formData.scheduled_at
       });
 
@@ -125,13 +147,12 @@ const MentorProfile = () => {
           <div className="max-w-5xl mx-auto">
             <div className="bg-card rounded-3xl shadow-elevated overflow-hidden border border-border">
               <div className="md:flex">
-                {/* Image Section */}
                 <div className="md:w-1/3 relative h-96 md:h-auto">
                   {mentor.image ? (
-                    <img 
-                      src={`/${mentor.image}`} 
-                      alt={mentor.name} 
-                      className="w-full h-full object-cover" 
+                    <img
+                      src={`/${mentor.image}`}
+                      alt={mentor.name}
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
@@ -146,7 +167,6 @@ const MentorProfile = () => {
                   </div>
                 </div>
 
-                {/* Details Section */}
                 <div className="md:w-2/3 p-8 md:p-12">
                   <h1 className="text-4xl md:text-5xl font-bold mb-4">{mentor.name}</h1>
                   <p className="text-2xl text-accent mb-6">{mentor.title}</p>
@@ -176,9 +196,9 @@ const MentorProfile = () => {
                       </div>
                     </div>
 
-                    <Button 
-                      variant="accent" 
-                      size="xl" 
+                    <Button
+                      variant="accent"
+                      size="xl"
                       className="w-full py-8 text-xl rounded-2xl"
                       onClick={openBookingDialog}
                     >
@@ -193,7 +213,6 @@ const MentorProfile = () => {
         </div>
       </section>
 
-      {/* Booking Dialog with Calendar Picker */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -212,6 +231,7 @@ const MentorProfile = () => {
                 placeholder="John Doe"
               />
             </div>
+
             <div className="grid gap-2">
               <Label htmlFor="email">Email *</Label>
               <Input
@@ -222,6 +242,50 @@ const MentorProfile = () => {
                 placeholder="john@example.com"
               />
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="age">Age *</Label>
+              <Input
+                id="age"
+                type="number"
+                value={formData.student_age}
+                onChange={(e) => setFormData({ ...formData, student_age: e.target.value })}
+                placeholder="22"
+                min="13"
+                max="120"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="university">University *</Label>
+              <Input
+                id="university"
+                value={formData.student_university}
+                onChange={(e) => setFormData({ ...formData, student_university: e.target.value })}
+                placeholder="University of Ghana"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="course">Programme / Course *</Label>
+              <Input
+                id="course"
+                value={formData.student_course}
+                onChange={(e) => setFormData({ ...formData, student_course: e.target.value })}
+                placeholder="Computer Science"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="level">Level / Year *</Label>
+              <Input
+                id="level"
+                value={formData.student_level}
+                onChange={(e) => setFormData({ ...formData, student_level: e.target.value })}
+                placeholder="Level 400 / Final Year"
+              />
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
               <Input
@@ -234,8 +298,8 @@ const MentorProfile = () => {
 
             <div className="grid gap-2">
               <Label>Preferred Date *</Label>
-              <Input 
-                type="date" 
+              <Input
+                type="date"
                 min={new Date().toISOString().split('T')[0]}
                 value={selectedDate}
                 onChange={async (e) => {
@@ -283,8 +347,8 @@ const MentorProfile = () => {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="accent" 
+            <Button
+              variant="accent"
               onClick={handleSubmitBooking}
               disabled={!formData.scheduled_at}
             >

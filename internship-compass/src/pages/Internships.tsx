@@ -354,7 +354,7 @@ const Internships = () => {
                           }}
                         >
                           <DialogTrigger asChild>
-                            <Button
+                            <Button 
                               variant={company.available_slots > 0 ? "accent" : "secondary"}
                               size="sm"
                               disabled={company.available_slots === 0}
