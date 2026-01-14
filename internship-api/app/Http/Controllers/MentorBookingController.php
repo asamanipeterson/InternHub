@@ -260,6 +260,7 @@ class MentorBookingController extends Controller
             'zoom_start_url'  => $zoom['start_url'] ?? null,
         ]);
 
+
         Mail::to($booking->student_email)->queue(new MentorBookingConfirmed($booking));
 
         if ($mentor->zoom_email) {
@@ -401,6 +402,44 @@ class MentorBookingController extends Controller
                     'payment_expires_at' => $booking->payment_expires_at?->toDateTimeString(),
                     'amount'             => $booking->amount,
                     'created_at'         => $booking->created_at,
+                ];
+            });
+
+        return response()->json($bookings);
+    }
+
+    // Add this inside class MentorBookingController extends Controller
+
+    public function getMentorBookings(Request $request)
+    {
+        // 1. Get the authenticated user
+        $user = $request->user();
+
+        // 2. Find the mentor record associated with this user
+        // Assuming you have a 'user_id' column on your 'mentors' table
+        $mentor = Mentor::where('user_id', $user->id)->first();
+
+        if (!$mentor) {
+            return response()->json(['message' => 'Mentor profile not found.'], 404);
+        }
+
+        // 3. Fetch bookings for this mentor
+        $bookings = MentorBooking::where('mentor_id', $mentor->id)
+            ->latest()
+            ->get()
+            ->map(function ($booking) {
+                return [
+                    'id' => $booking->id,
+                    'student' => [
+                        'name' => $booking->student_name,
+                        'email' => $booking->student_email,
+                        'university' => $booking->student_university,
+                        'course' => $booking->student_course,
+                        'phone' => $booking->student_phone,
+                    ],
+                    'scheduled_at' => $booking->scheduled_at,
+                    'status' => $booking->status,
+                    'zoom_join_url' => $booking->zoom_join_url,
                 ];
             });
 

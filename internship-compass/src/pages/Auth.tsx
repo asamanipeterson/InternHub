@@ -64,29 +64,44 @@ const Auth = () => {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (response) => {
-      // ── NEW OTP FLOW HANDLING ──
+      // ── OTP FLOW HANDLING ──
       if (response.redirect) {
-        // Server told us to go to OTP page (after sending code)
         toast.success(response.message || "OTP sent! Check your email.");
-        navigate(response.redirect); // ← React navigates to /verify-otp
+        navigate(response.redirect);
         return;
       }
 
-      // Fallback: direct login (if OTP is disabled in future)
+      // Normal successful login (cookie-based or token-based)
       const user = response?.user;
       const token = response?.token;
 
-      if (user && token) {
+      // ── DEBUG LOGS ──
+      console.log("Full login response from server:", response);
+      console.log("User object received:", user);
+
+      if (user) {
         localStorage.setItem("user", JSON.stringify(user));
-        localStorage.setItem("token", token);
+        if (token) {
+          localStorage.setItem("token", token);
+        }
         window.dispatchEvent(new Event("userUpdated"));
 
-        const userType = user.user_type?.toString().toLowerCase().trim();
+        // Debug: show exactly what user_type looks like
+        console.log("Raw user_type value:", user.user_type);
+        console.log("user_type type:", typeof user.user_type);
+
+        const userType = user.user_type?.toString().toLowerCase().trim() ?? "";
+
+        console.log("Final processed userType:", userType);
 
         if (userType === "admin") {
           toast.success(`Welcome back, Admin ${user.name}!`);
           navigate("/dashboard", { replace: true });
+        } else if (userType === "mentor") {
+          toast.success(`Welcome, Mentor ${user.name}!`);
+          navigate("/mentor/dashboard", { replace: true });
         } else {
+          // Default: student / user
           toast.success(`Welcome, ${user.name}!`);
           navigate("/", { replace: true });
         }
@@ -182,7 +197,7 @@ const Auth = () => {
                     transition={{ duration: 0.25, ease: "easeOut" }}
                     className="space-y-6"
                   >
-                    {/* Conditional register-only fields */}
+                    {/* Conditional register-only fields (students only) */}
                     {!isLogin && (
                       <>
                         <div>
@@ -250,7 +265,7 @@ const Auth = () => {
                               <p className="text-sm text-destructive mt-1">{registerForm.formState.errors.year.message}</p>
                             )}
                           </div>
- 
+
                           <div>
                             <Label htmlFor="phone">Phone Number <span className="text-red-600" aria-hidden="true">*</span></Label>
                             <div className="relative mt-2">
@@ -286,7 +301,7 @@ const Auth = () => {
                       </>
                     )}
 
-                    {/* Common fields */}
+                    {/* Common fields - Email & Password */}
                     <div>
                       <Label htmlFor="email">Email Address <span className="text-red-600" aria-hidden="true">*</span></Label>
                       <div className="relative mt-2">
@@ -358,12 +373,12 @@ const Auth = () => {
 
                     {isLogin && (
                       <div className="flex items-center justify-end">
-                        <Link 
-                            to="/forgot-password" 
-                            className="text-sm text-primary hover:text-primary/80 transition-colors"
-                          >
-                            Forgot password?
-                          </Link>
+                        <Link
+                          to="/forgot-password"
+                          className="text-sm text-primary hover:text-primary/80 transition-colors"
+                        >
+                          Forgot password?
+                        </Link>
                       </div>
                     )}
                   </motion.div>
@@ -435,4 +450,4 @@ const Auth = () => {
   );
 };
 
-export default Auth;
+export default Auth

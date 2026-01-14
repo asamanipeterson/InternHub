@@ -115,7 +115,7 @@ export const Navbar = () => {
           <div className="hidden lg:flex items-center gap-4">
             {!isLoggedIn && !isOnAuthPage && (
               <Link to="/auth">
-                <Button variant="accent">Get Started</Button>
+                <Button variant="accent">Register</Button>
               </Link>
             )}
 
@@ -269,7 +269,7 @@ export const Navbar = () => {
                   !isOnAuthPage && (
                     <Link to="/auth" onClick={() => setIsOpen(false)}>
                       <Button variant="accent" className="w-full">
-                        Get Started
+                        Register
                       </Button>
                     </Link>
                   )

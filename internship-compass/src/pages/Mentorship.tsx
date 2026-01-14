@@ -319,7 +319,7 @@ const Mentorship = () => {
                 Expert mentorship is only available to registered users. Sign up to connect with top professionals!
               </p>
               <Button variant="accent" size="lg" className="px-10 py-6 text-lg" onClick={() => navigate("/auth")}>
-                Get Started
+                Register
               </Button>
             </motion.div>
           </div>

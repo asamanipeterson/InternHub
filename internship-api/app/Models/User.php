@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Facades\Mail;
+use App\Models\Mentor;
 use Carbon\Carbon;
 use App\Models\OneTimePassCode;
 
@@ -23,7 +23,7 @@ class User extends Authenticatable
         'year',
         'phone',
         'nationality',
-        'user_type', // keep if you use it
+        'user_type',
     ];
 
     protected $hidden = [
@@ -39,23 +39,44 @@ class User extends Authenticatable
         ];
     }
 
+    public function mentor()
+    {
+        return $this->hasOne(Mentor::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->user_type === 'admin';
+    }
+
+    public function isMentor(): bool
+    {
+        return $this->user_type === 'mentor';
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->user_type === 'user';
+    }
+
+    public function oneTimePassword()
+    {
+        return $this->hasOne(OneTimePassCode::class);
+    }
+
     public function generateOtp()
     {
-        // Generate OTP
         $otpCode = rand(100000, 999999);
 
-        // Delete old OTP if exists
         $this->oneTimePassword()->delete();
 
-        // Save new OTP
         $this->oneTimePassword()->create([
             'code' => $otpCode,
             'expires_at' => Carbon::now()->addMinutes(5),
         ]);
 
-        // Send OTP mail
         // Mail::to($this->email)->send(new OtpMail($otpCode));
 
-        return $otpCode; // optional, in case you want to log/debug
+        return $otpCode;
     }
 }

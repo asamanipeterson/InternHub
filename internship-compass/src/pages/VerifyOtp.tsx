@@ -1,4 +1,3 @@
-// src/pages/VerifyOtp.tsx
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -10,7 +9,7 @@ import api from "@/lib/api";
 const VerifyOtp = () => {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [timeLeft, setTimeLeft] = useState(60); // 30 seconds
+  const [timeLeft, setTimeLeft] = useState(60); 
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<HTMLInputElement[]>([]);
 
@@ -26,9 +25,7 @@ const VerifyOtp = () => {
       });
     }, 1000);
 
-    // Auto-focus first input on mount
     inputRefs.current[0]?.focus();
-
     return () => clearInterval(timer);
   }, []);
 
@@ -43,7 +40,6 @@ const VerifyOtp = () => {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-submit when all 6 digits are filled
     if (newOtp.every((d) => d !== "") && newOtp.join("").length === 6) {
       verifyOtp(newOtp.join(""));
     }
@@ -69,22 +65,37 @@ const VerifyOtp = () => {
 
   const verifyOtp = async (code: string) => {
     try {
-      // CRITICAL: Refresh CSRF cookie BEFORE the POST
+      // Refresh CSRF cookie
       await api.get("/sanctum/csrf-cookie");
 
       const res = await api.post("/api/verify-otp", { otp: code });
       const { user, token } = res.data;
 
+      // Save Auth Data
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("token", token);
+      
+      // Update Navbar/Global State
       window.dispatchEvent(new Event("userUpdated"));
 
-      toast.success(`Login successful! ${user.name}.`);
-      navigate(user.user_type?.toLowerCase() === "admin" ? "/dashboard" : "/");
+      toast.success(`Login successful! Welcome back, ${user.name}.`);
+
+      // ─── FIXED REDIRECT LOGIC ───
+      const userType = user.user_type?.toString().toLowerCase().trim();
+
+      if (userType === "admin") {
+        navigate("/dashboard", { replace: true });
+      } else if (userType === "mentor") {
+        navigate("/mentor/dashboard", { replace: true });
+      } else {
+        // Standard user/student redirect
+        navigate("/", { replace: true });
+      }
+      // ────────────────────────────
+
     } catch (err: any) {
       const message = err.response?.data?.message || "Invalid or expired code";
       toast.error(message);
-      // If session expired, redirect back to login
       if (message.includes("Session expired")) {
         navigate("/auth");
       }
@@ -93,9 +104,7 @@ const VerifyOtp = () => {
 
   const resendOtp = async () => {
     try {
-      // CRITICAL: Refresh CSRF cookie BEFORE the POST
       await api.get("/sanctum/csrf-cookie");
-
       await api.post("/api/resend-otp");
       toast.success("New code sent!");
       setTimeLeft(60);
@@ -105,14 +114,12 @@ const VerifyOtp = () => {
     } catch (err: any) {
       const message = err.response?.data?.message || "Failed to resend";
       toast.error(message);
-      // If session expired here too, go back to login
       if (message.includes("Session expired")) {
         navigate("/auth");
       }
     }
   };
 
-  const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
   return (
@@ -131,7 +138,6 @@ const VerifyOtp = () => {
         </div>
 
         <div className="p-10 space-y-8">
-          {/* OTP Inputs */}
           <div className="flex justify-center gap-4">
             {otp.map((digit, index) => (
               <Input
@@ -150,7 +156,6 @@ const VerifyOtp = () => {
             ))}
           </div>
 
-          {/* Timer */}
           <div className="text-center text-sm text-muted-foreground">
             Code expires in{" "}
             <span className="font-medium text-primary">
@@ -159,7 +164,6 @@ const VerifyOtp = () => {
             seconds
           </div>
 
-          {/* Verify Button */}
           <Button
             onClick={() => verifyOtp(otp.join(""))}
             className="w-full h-12 text-base font-semibold"
@@ -168,7 +172,6 @@ const VerifyOtp = () => {
             Verify Code
           </Button>
 
-          {/* Resend */}
           <Button
             variant="outline"
             className="w-full h-12"

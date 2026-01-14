@@ -37,42 +37,37 @@ class PaymentController extends Controller
             $data = $event['data'];
             $reference = $data['reference'];
 
+            // Important: only look for 'approved' bookings (not yet paid)
             $booking = Booking::where('payment_reference', $reference)
-                ->whereIn('status', ['approved', 'paid'])
+                ->where('status', 'approved')   // ← changed: only 'approved'
                 ->first();
 
             if (!$booking) {
-                Log::warning("Paystack Webhook: Booking not found for reference {$reference}");
-                return response()->json(['message' => 'Booking not found'], 404);
-            }
-
-            // Prevent double processing
-            if ($booking->status === 'paid') {
-                return response()->json(['message' => 'Already processed'], 200);
+                Log::warning("Paystack Webhook: Booking not found or already processed for reference {$reference}");
+                return response()->json(['message' => 'Booking not found or already processed'], 200);
             }
 
             // Mark as paid
             $booking->update([
-                'status' => 'paid',
+                'status'                => 'paid',
                 'paystack_transaction_id' => $data['id'],
-                'expires_at' => null,
+                'expires_at'            => null,
             ]);
 
-            // Decrement available slots safely
+            // ↓↓↓ This is the ONLY place we decrement available slots ↓↓↓
             $booking->company()->decrement('available_slots');
 
             // Send success email
             Mail::to($booking->student_email)->send(new PaymentSuccessMail($booking));
 
-            Log::info("Payment successful for Booking ID: {$booking->id}");
-            Log::info('Paystack Webhook Event', ['event' => $event['event'], 'reference' => $data['reference'] ?? null]);
+            Log::info("Payment successful & slot reserved → Booking ID: {$booking->id}");
         }
 
         return response()->json(['message' => 'Webhook handled'], 200);
     }
 
     /**
-     * Optional: Redirect page after payment (Paystack redirects here)
+     * Redirect page after payment (Paystack redirects here)
      */
     public function success(Request $request)
     {

@@ -68,7 +68,8 @@ class BookingController extends Controller
     }
 
     /**
-     * Approve a pending application → Reserve slot + Initialize Paystack + Send email
+     * Approve a pending application → Initialize Paystack + Send email
+     * (do NOT decrement slot here anymore)
      */
     public function approve($id, Request $request)
     {
@@ -83,15 +84,12 @@ class BookingController extends Controller
             ], 400);
         }
 
-        // Prevent approval if no slots left
+        // Still check slots (optimistic check)
         if ($booking->company->available_slots <= 0) {
             return response()->json([
                 'message' => 'No available slots remaining for this company.'
             ], 400);
         }
-
-        // Reserve the slot immediately on approval
-        $booking->company->decrement('available_slots');
 
         // Generate unique payment reference
         $reference = 'intern_' . Str::random(10) . '_' . $booking->id;
@@ -106,7 +104,7 @@ class BookingController extends Controller
             'currency'      => 'GHS',
             'email'         => $booking->student_email,
             'callback_url'  => route('payment.callback'),
-            'channels'      => ['card', 'mobile_money'], // Enables both Card and MoMo
+            'channels'      => ['card', 'mobile_money'],
             'metadata'      => [
                 'booking_id'   => $booking->id,
                 'company_name' => $booking->company->name,
@@ -114,9 +112,6 @@ class BookingController extends Controller
         ]);
 
         if (!$response->successful() || !$response->json('status')) {
-            // If payment init fails, free the slot back
-            $booking->company->increment('available_slots');
-
             return response()->json([
                 'message' => 'Failed to initialize payment with Paystack.',
                 'error'   => $response->json()
@@ -132,15 +127,15 @@ class BookingController extends Controller
             'amount'            => $amountInPesewas,
             'currency'          => 'GHS',
             'expires_at'        => now()->addHours(24),
-            // 'expires_at' => now()->addSeconds(30), // For testing purposes
+            // 'expires_at' => now()->addSeconds(30), // ← for testing
         ]);
 
         // Send payment link email
         Mail::to($booking->student_email)->send(new PaymentLinkMail($booking, $data['authorization_url']));
 
-        // Schedule auto-expiry after 24 hours
+        // Schedule auto-expiry job
         ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
-        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addSeconds(30)); // For testing purposes
+        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addSeconds(30)); // testing
 
         return response()->json([
             'message'     => 'Application approved. Payment link for GHS 2.00 sent to student.',

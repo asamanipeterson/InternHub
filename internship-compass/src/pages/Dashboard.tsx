@@ -48,6 +48,7 @@ import {
   Clock,
   Download,
   Calendar as CalendarIcon,
+  Mail,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -75,6 +76,7 @@ interface Mentor {
   rating: number | string;
   session_price: number | string;
   zoom_email?: string | null;
+  user?: { email: string }; // for loaded relation
 }
 
 interface Booking {
@@ -91,7 +93,6 @@ interface Booking {
   expires_at?: string | null;
 }
 
-// Type for mentorship bookings (adjust fields based on your actual API response)
 interface MentorBooking {
   id: string;
   student_name: string;
@@ -136,8 +137,8 @@ const Dashboard = () => {
   // Main data states
   const [companies, setCompanies] = useState<Company[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]); // Internship/company bookings
-  const [mentorBookings, setMentorBookings] = useState<MentorBooking[]>([]); // Only paid mentorship bookings
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [mentorBookings, setMentorBookings] = useState<MentorBooking[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Company dialog states
@@ -161,6 +162,7 @@ const Dashboard = () => {
   const [mentorPreview, setMentorPreview] = useState<string | null>(null);
   const [mentorForm, setMentorForm] = useState({
     name: "",
+    email: "",
     title: "",
     specialization: "",
     bio: "",
@@ -173,7 +175,7 @@ const Dashboard = () => {
   // Availability editor states
   const [selectedMentorForAvailability, setSelectedMentorForAvailability] = useState<Mentor | null>(null);
   const [availabilityForm, setAvailabilityForm] = useState({
-    selectedDays: [] as number[], // 1=Mon, 2=Tue, ..., 7=Sun
+    selectedDays: [] as number[],
     start_time: "09:00",
     end_time: "17:00"
   });
@@ -200,19 +202,14 @@ const Dashboard = () => {
         const [companiesRes, mentorsRes, internshipRes, mentorBookingsRes] = await Promise.all([
           api.get("/api/companies"),
           api.get("/api/mentors"),
-          api.get("/api/admin/bookings"),              // Internship bookings (your original)
-          api.get("/api/admin/mentor-bookings"),       // Only PAID mentorship bookings
+          api.get("/api/admin/bookings"),
+          api.get("/api/admin/mentor-bookings"),
         ]);
 
         setCompanies(companiesRes.data);
         setMentors(mentorsRes.data);
         setBookings(internshipRes.data);
         setMentorBookings(mentorBookingsRes.data);
-
-        // Debug logs - remove later if you want
-        console.log("Fetched internship bookings:", internshipRes.data.length);
-        console.log("Fetched paid mentor bookings:", mentorBookingsRes.data);
-        console.log("Count of paid mentorships:", mentorBookingsRes.data.length);
       } catch (err: any) {
         toast.error("Failed to load dashboard data");
         console.error("Dashboard fetch error:", err);
@@ -228,9 +225,7 @@ const Dashboard = () => {
     if (file) {
       setCompanyFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setCompanyPreview(reader.result as string);
-      };
+      reader.onloadend = () => setCompanyPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -240,9 +235,7 @@ const Dashboard = () => {
     if (file) {
       setMentorFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setMentorPreview(reader.result as string);
-      };
+      reader.onloadend = () => setMentorPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -252,8 +245,6 @@ const Dashboard = () => {
   const bookedSlots = totalSlots - availableSlotsTotal;
 
   const pendingInternshipBookings = bookings.filter(b => b.status === 'pending').length;
-
-  // Correct count: only paid mentorship bookings
   const bookedMentorships = mentorBookings.length;
 
   const refreshData = async () => {
@@ -337,12 +328,21 @@ const Dashboard = () => {
   };
 
   const handleSaveMentor = async () => {
-    if (!mentorForm.name || !mentorForm.title || !mentorForm.session_price) {
-      toast.error("Please fill in all required fields including session price");
+    if (!mentorForm.name || !mentorForm.email || !mentorForm.title || !mentorForm.session_price) {
+      toast.error("Please fill in all required fields: name, email, title, session price");
       return;
     }
+
+    // Client-side email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(mentorForm.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("name", mentorForm.name);
+    formData.append("email", mentorForm.email.trim());
     formData.append("title", mentorForm.title);
     formData.append("specialization", mentorForm.specialization || "");
     formData.append("bio", mentorForm.bio || "");
@@ -358,25 +358,41 @@ const Dashboard = () => {
         toast.success("Mentor updated successfully");
       } else {
         await api.post("/api/mentors", formData);
-        toast.success("Mentor added successfully");
+        toast.success("Mentor added successfully – welcome email sent!");
       }
       setMentorDialogOpen(false);
       setEditingMentor(null);
       setMentorForm({
         name: "",
+        email: "",
         title: "",
         specialization: "",
         bio: "",
         experience: 5,
         rating: 4.5,
         session_price: 200.00,
-        zoom_email: ""
+        zoom_email: "",
       });
       setMentorFile(null);
       setMentorPreview(null);
       await refreshData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Error saving mentor");
+      const errorData = err.response?.data;
+      if (errorData?.errors?.email) {
+        const msg = errorData.errors.email[0];
+        if (msg.includes("taken")) {
+          toast.error("This email is already in use by a student or another mentor.");
+        } else if (msg.includes("required")) {
+          toast.error("Email address is required.");
+        } else {
+          toast.error(msg);
+        }
+      } else if (errorData?.message) {
+        toast.error(errorData.message);
+      } else {
+        toast.error("Failed to save mentor. Please try again.");
+      }
+      console.error("Mentor save error:", err);
     }
   };
 
@@ -384,6 +400,7 @@ const Dashboard = () => {
     setEditingMentor(mentor);
     setMentorForm({
       name: mentor.name,
+      email: mentor.user?.email || "",
       title: mentor.title,
       specialization: mentor.specialization || "",
       bio: mentor.bio || "",
@@ -498,18 +515,6 @@ const Dashboard = () => {
       color: "bg-purple-500",
       onClick: () => navigate("/admin/mentorship-bookings")
     },
-    // { 
-    //   icon: Clock, 
-    //   label: "Pending Mentorship Payments", 
-    //   value: mentorBookings.filter(b => b.status === 'pending').length, 
-    //   color: "bg-orange-500"
-    // },
-    // { 
-    //   icon: XCircle, 
-    //   label: "Expired Mentorships", 
-    //   value: mentorBookings.filter(b => b.status === 'expired').length, 
-    //   color: "bg-red-500"
-    // },
   ];
 
   const displayedCompanies = companies.slice(0, visibleCompanies);
@@ -564,7 +569,6 @@ const Dashboard = () => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            // className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4"
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3"
           >
             {stats.map((stat) => (
@@ -805,6 +809,7 @@ const Dashboard = () => {
                         setEditingMentor(null);
                         setMentorForm({
                           name: "",
+                          email: "",
                           title: "",
                           specialization: "",
                           bio: "",
@@ -853,6 +858,23 @@ const Dashboard = () => {
                           Change Photo
                         </Button>
                       </div>
+
+                      {/* Email field - now required and visible */}
+                      <div>
+                        <Label>Email Address (login & notifications) *</Label>
+                        <div className="relative mt-2">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                          <Input
+                            type="email"
+                            placeholder="mentor@example.com"
+                            value={mentorForm.email}
+                            onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })}
+                            className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Name *</Label>
@@ -871,6 +893,7 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
+
                       <div>
                         <Label>Specialization</Label>
                         <Input
@@ -879,6 +902,7 @@ const Dashboard = () => {
                           onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
                         />
                       </div>
+
                       <div>
                         <Label>Bio</Label>
                         <Textarea
@@ -887,6 +911,7 @@ const Dashboard = () => {
                           onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
                         />
                       </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Experience (years)</Label>
@@ -908,6 +933,7 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Session Price (GHS) *</Label>
@@ -929,6 +955,7 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
+
                       <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
                         {editingMentor ? "Update Mentor" : "Add Mentor"}
                       </Button>
@@ -995,7 +1022,7 @@ const Dashboard = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex items-center justify-between"
               >
-                <h2 className="text-2xl font-bold">Internship Applications</h2>
+                <h2 className="text-2xl font-bold">Internship Applications</h2> 
               </motion.div>
 
               <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
@@ -1145,7 +1172,6 @@ const Dashboard = () => {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Days Selection */}
             <div>
               <Label>Select Days</Label>
               <div className="grid grid-cols-7 gap-2 mt-3">
@@ -1201,7 +1227,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Time Range */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Start Time</Label>

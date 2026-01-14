@@ -211,7 +211,7 @@ const Internships = () => {
               </p>
               <Link to="/auth">
                 <Button variant="accent" size="lg" className="px-10 py-6 text-lg">
-                  Get Started
+                Register
                 </Button>
               </Link>
             </motion.div>

@@ -16,7 +16,7 @@ use Carbon\Carbon;
 class AuthController extends Controller
 {
     /**
-     * Register a new user
+     * Register a new user (student)
      */
     public function register(Request $request)
     {
@@ -48,12 +48,23 @@ class AuthController extends Controller
             'phone'         => $validated['phone'],
             'nationality'   => $validated['nationality'],
             'password'      => Hash::make($validated['password']),
+            'user_type'     => 'user', // default to student
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user'  => $user,
+            'user' => $user->only([
+                'id',
+                'name',
+                'email',
+                'user_type',
+                'university',
+                'course',
+                'year',
+                'phone',
+                'nationality',
+            ]),
             'token' => $token,
         ], 201);
     }
@@ -76,7 +87,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        // Generate and store OTP (expires in 30 seconds)
+        // Generate and store OTP (expires in 60 seconds)
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
         OneTimePassCode::updateOrCreate(
@@ -139,8 +150,19 @@ class AuthController extends Controller
         // Create Sanctum token
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Explicitly return user with user_type so frontend can redirect correctly
         return response()->json([
-            'user'    => $user,
+            'user' => $user->only([
+                'id',
+                'name',
+                'email',
+                'user_type',               // ← Critical fix: now included
+                'university',
+                'course',
+                'year',
+                'phone',
+                'nationality',
+            ]),
             'token'   => $token,
             'message' => 'Verification successful'
         ]);
@@ -192,13 +214,16 @@ class AuthController extends Controller
     }
 
     /**
-     * Get authenticated user
+     * Get authenticated user (for /api/user endpoint)
      */
     public function user(Request $request)
     {
         return response()->json($request->user());
     }
 
+    /**
+     * Forgot Password → send OTP
+     */
     public function forgotPassword(Request $request)
     {
         $request->validate(['email' => 'required|email']);

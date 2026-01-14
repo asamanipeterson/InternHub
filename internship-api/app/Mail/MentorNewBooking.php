@@ -1,5 +1,4 @@
 <?php
-// app/Mail/MentorNewBooking.php
 
 namespace App\Mail;
 
@@ -10,6 +9,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class MentorNewBooking extends Mailable implements ShouldQueue
 {
@@ -22,7 +22,7 @@ class MentorNewBooking extends Mailable implements ShouldQueue
      */
     public function __construct(MentorBooking $booking)
     {
-        $this->booking = $booking;
+        $this->booking = $booking->load(['mentor']); // eager load mentor relationship
     }
 
     /**
@@ -30,8 +30,14 @@ class MentorNewBooking extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $studentName = $this->booking->student_name ?? 'A Student';
+        $sessionTime = $this->booking->scheduled_at
+            ? \Carbon\Carbon::parse($this->booking->scheduled_at)->format('M j, Y g:i A')
+            : 'Upcoming';
+
         return new Envelope(
-            subject: 'New Mentorship Booking Received',
+            subject: "New Booking: {$studentName} - {$sessionTime}",
+            replyTo: [$this->booking->student_email ?? config('mail.from.address')],
         );
     }
 
@@ -40,6 +46,15 @@ class MentorNewBooking extends Mailable implements ShouldQueue
      */
     public function content(): Content
     {
+        // Optional: log in development for debugging
+        if (app()->environment('local', 'testing')) {
+            Log::info('MentorNewBooking email queued', [
+                'booking_id' => $this->booking->id,
+                'to'         => $this->booking->mentor?->zoom_email ?? $this->booking->mentor?->email ?? 'unknown',
+                'student'    => $this->booking->student_name,
+            ]);
+        }
+
         return new Content(
             view: 'emails.mentor_new_booking',
             with: [
@@ -54,5 +69,6 @@ class MentorNewBooking extends Mailable implements ShouldQueue
     public function attachments(): array
     {
         return [];
+        // You could add .ics calendar attachment here in the future if desired
     }
 }

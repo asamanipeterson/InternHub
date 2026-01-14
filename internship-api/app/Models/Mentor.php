@@ -11,6 +11,7 @@ class Mentor extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'title',
         'specialization',
@@ -55,5 +56,9 @@ class Mentor extends Model
         return MentorBooking::where('mentor_id', $this->id)
             ->where('status', 'paid')
             ->count();
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

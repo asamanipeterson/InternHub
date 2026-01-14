@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 const About = () => {
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
+    visible: { 
       opacity: 1,
       transition: { staggerChildren: 0.15 },
     },

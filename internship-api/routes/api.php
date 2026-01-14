@@ -16,10 +16,10 @@ Route::middleware('web')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
     Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
-    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 });
 
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 // Public listing (you can decide if these should be public or protected)
 Route::get('companies', [CompanyController::class, 'index'])->middleware('auth:sanctum');
 Route::get('mentors', [MentorController::class, 'index'])->middleware('auth:sanctum');
@@ -76,3 +76,13 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 });
 
 Route::post('bookings', [BookingController::class, 'store'])->middleware('auth:sanctum');
+
+
+
+Route::middleware(['auth:sanctum', 'mentor'])->prefix('mentor')->group(function () {
+    Route::get('/bookings', [MentorBookingController::class, 'getMentorBookings']);
+});
+
+Route::get('/mentor/set-password/{token}', function (string $token) {
+    return view('auth.set-password', ['token' => $token]);
+})->middleware('signed')->name('mentor.set-password');
