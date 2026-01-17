@@ -177,8 +177,8 @@ const AdminMentorshipBookings = () => {
                             {/* Mentor */}
                             <td className="p-4">
                               <div>
-                                <p className="font-medium">{booking.mentor_name}</p>
-                                <p className="text-sm text-muted-foreground">{booking.mentor_title}</p>
+                                <p className="font-medium">{booking.mentor.name}</p>
+                                <p className="text-sm text-muted-foreground">{booking.mentor.title}</p>
                               </div>
                             </td>
 
