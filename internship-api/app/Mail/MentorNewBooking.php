@@ -22,7 +22,8 @@ class MentorNewBooking extends Mailable implements ShouldQueue
      */
     public function __construct(MentorBooking $booking)
     {
-        $this->booking = $booking->load(['mentor']); // eager load mentor relationship
+        // Eager load mentor to ensure we have contact info
+        $this->booking = $booking->load(['mentor']);
     }
 
     /**
@@ -46,12 +47,12 @@ class MentorNewBooking extends Mailable implements ShouldQueue
      */
     public function content(): Content
     {
-        // Optional: log in development for debugging
         if (app()->environment('local', 'testing')) {
             Log::info('MentorNewBooking email queued', [
                 'booking_id' => $this->booking->id,
-                'to'         => $this->booking->mentor?->zoom_email ?? $this->booking->mentor?->email ?? 'unknown',
+                'to'         => $this->booking->mentor?->email ?? 'unknown',
                 'student'    => $this->booking->student_name,
+                'meet_link'  => $this->booking->google_meet_link,
             ]);
         }
 
@@ -69,6 +70,5 @@ class MentorNewBooking extends Mailable implements ShouldQueue
     public function attachments(): array
     {
         return [];
-        // You could add .ics calendar attachment here in the future if desired
     }
 }

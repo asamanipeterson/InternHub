@@ -40,8 +40,6 @@ class MentorWelcomeSetPassword extends Notification implements ShouldQueue
             ->line("You've been added as a mentor on Student Industry Connect.")
             ->line("**Your login email is:** {$notifiable->email}")
             ->line("To access your dashboard and see your student bookings, please set your password now.")
-            ->line("Use this **6-digit verification code** to verify your identity:")
-            // ->line("**{$code}** (expires in 10 minutes)")
             ->action('Set My Password Now', $setPasswordUrl)
             ->line("Or visit directly:")
             ->line($setPasswordUrl)

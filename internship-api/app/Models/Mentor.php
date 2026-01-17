@@ -12,6 +12,7 @@ class Mentor extends Model
 
     protected $fillable = [
         'user_id',
+        'uuid',
         'name',
         'title',
         'specialization',
@@ -20,45 +21,112 @@ class Mentor extends Model
         'experience',
         'rating',
         'session_price',
-        'zoom_email',
         'email',
-        'uuid'
+        'google_calendar_email', // Replaced zoom_email
+        'google_access_token',
+        'google_refresh_token',
+        'google_token_expires_in',
+        'google_token_created_at'
     ];
 
     protected $casts = [
         'experience' => 'integer',
         'rating' => 'decimal:2',
-        'session_price' => 'decimal:2',   // ← THIS FIXES IT!
+        'session_price' => 'decimal:2',
+        'google_token_created_at' => 'datetime',
     ];
+
+    /**
+     * Automatically include this in JSON responses
+     */
+    protected $appends = ['is_google_connected'];
 
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($mentor) {
-            $mentor->uuid = Str::random(32);
+            if (empty($mentor->uuid)) {
+                $mentor->uuid = (string) Str::uuid();
+            }
         });
     }
 
-    // Optional: Route key is UUID instead of ID
+    /**
+     * Use UUID for routing instead of ID
+     */
     public function getRouteKeyName()
     {
         return 'uuid';
     }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function availabilities()
     {
         return $this->hasMany(MentorAvailability::class);
     }
 
-    // Helper: get active (paid) bookings count
+    /**
+     * Get active (paid) bookings count
+     */
     public function activeBookingsCount()
     {
         return MentorBooking::where('mentor_id', $this->id)
             ->where('status', 'paid')
             ->count();
     }
-    public function user()
+
+    /**
+     * Encrypt Google Access Token
+     */
+    public function setGoogleAccessTokenAttribute($value)
     {
-        return $this->belongsTo(User::class);
+        $this->attributes['google_access_token'] = $value ? encrypt($value) : null;
+    }
+
+    /**
+     * Decrypt Google Access Token
+     */
+    public function getGoogleAccessTokenAttribute($value)
+    {
+        try {
+            return $value ? decrypt($value) : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Encrypt Google Refresh Token
+     */
+    public function setGoogleRefreshTokenAttribute($value)
+    {
+        $this->attributes['google_refresh_token'] = $value ? encrypt($value) : null;
+    }
+
+    /**
+     * Decrypt Google Refresh Token
+     */
+    public function getGoogleRefreshTokenAttribute($value)
+    {
+        try {
+            return $value ? decrypt($value) : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Check if Google is connected (Accessors)
+     */
+    public function getIsGoogleConnectedAttribute()
+    {
+        // We check refresh_token because access_tokens expire frequently,
+        // but a refresh_token means we have persistent access.
+        return !empty($this->google_refresh_token);
     }
 }

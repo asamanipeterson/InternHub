@@ -61,7 +61,11 @@ export const Navbar = () => {
     };
   }, []);
 
-  const isAdmin = user?.user_type?.toString().toLowerCase().trim() === "admin";
+  // Role checks - precise & case-insensitive
+  const userType = user?.user_type?.toString().toLowerCase().trim();
+  const isAdmin = userType === "admin";
+  const isMentor = userType === "mentor";
+  const isStudent = userType === "student" || userType === "user"; // Check for both
   const isLoggedIn = !!user;
   const isOnAuthPage = location.pathname === "/auth";
 
@@ -78,7 +82,9 @@ export const Navbar = () => {
     return location.pathname.startsWith(href);
   };
 
-  const userName = user?.name || user?.email?.split('@')[0] || "User";
+  // Updated fallback logic: Use "Student" instead of "User"
+  const userName = user?.name || user?.email?.split('@')[0] || "Student";
+  const userRoleDisplay = isAdmin ? "Administrator" : isMentor ? "Mentor" : "Student";
 
   return (
     <motion.nav
@@ -152,7 +158,7 @@ export const Navbar = () => {
                         <div className="px-4 py-3 border-b border-border">
                           <p className="font-medium">{userName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {isAdmin ? "Administrator" : "Student"}
+                            {userRoleDisplay}
                           </p>
                         </div>
 
@@ -164,7 +170,19 @@ export const Navbar = () => {
                             onClick={() => setIsDropdownOpen(false)}
                           >
                             <Shield className="h-5 w-5 mr-3 text-primary" />
-                            <span>Dashboard</span>
+                            <span>Admin Dashboard</span>
+                          </Link>
+                        )}
+
+                        {/* Mentor: Dashboard */}
+                        {isMentor && (
+                          <Link
+                            to="/mentor/dashboard"
+                            className="flex items-center px-4 py-3 hover:bg-secondary transition-colors"
+                            onClick={() => setIsDropdownOpen(false)}
+                          >
+                            <Shield className="h-5 w-5 mr-3 text-primary" />
+                            <span>Mentor Dashboard</span>
                           </Link>
                         )}
 
@@ -238,7 +256,7 @@ export const Navbar = () => {
                     <div className="px-4 py-3 bg-secondary/50 rounded-lg">
                       <p className="font-medium">{userName}</p>
                       <p className="text-sm text-muted-foreground">
-                        {isAdmin ? "Administrator" : "Student"}
+                        {userRoleDisplay}
                       </p>
                     </div>
 
@@ -247,7 +265,17 @@ export const Navbar = () => {
                       <Link to="/dashboard" onClick={() => setIsOpen(false)}>
                         <Button variant="outline" className="w-full">
                           <Shield className="w-4 h-4 mr-2" />
-                          Dashboard
+                          Admin Dashboard
+                        </Button>
+                      </Link>
+                    )}
+
+                    {/* Mentor: Dashboard */}
+                    {isMentor && (
+                      <Link to="/mentor/dashboard" onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="w-full">
+                          <Shield className="w-4 h-4 mr-2" />
+                          Mentor Dashboard
                         </Button>
                       </Link>
                     )}

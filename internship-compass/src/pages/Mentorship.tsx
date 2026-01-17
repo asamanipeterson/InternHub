@@ -113,6 +113,7 @@ const Mentorship = () => {
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   // Booking Dialog State
   const [open, setOpen] = useState(false);
@@ -132,6 +133,31 @@ const Mentorship = () => {
   });
 
   const navigate = useNavigate();
+
+  // Handle Redirect Status (Success/Failure)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("booking");
+    const meetLink = params.get("meetLink");
+
+    if (status === "success") {
+      toast.success("Payment successful!", {
+        description: "Your Google Meet link has been generated and emailed to you.",
+        duration: 10000,
+      });
+
+      if (meetLink) {
+        console.log("Session Link:", meetLink);
+      }
+
+      navigate("/mentorship", { replace: true });
+    } else if (status === "failed") {
+      toast.error("Payment failed", {
+        description: "The transaction was not completed. Please try again.",
+      });
+      navigate("/mentorship", { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const fetchMentors = async () => {
@@ -185,6 +211,7 @@ const Mentorship = () => {
       return;
     }
 
+    setBookingLoading(true);
     try {
       const response = await api.post("/api/mentor/book/initiate", {
         mentor_id: selectedMentor.id,
@@ -199,28 +226,19 @@ const Mentorship = () => {
       });
 
       if (response.data.success) {
-        toast.success(`Redirecting to payment... You have 24 hours to complete.`);
+        toast.info(`Redirecting to payment...`);
         window.location.href = response.data.authorization_url;
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Booking failed. Please try again.");
+    } finally {
+      setBookingLoading(false);
     }
   };
 
   const goToProfile = (mentor: Mentor) => {
     navigate(`/mentorship/mentor/${mentor.uuid}`);
   };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("booking") === "success") {
-      toast.success("Payment successful! Check your email for your Zoom meeting link.");
-      window.history.replaceState({}, "", "/mentorship");
-    } else if (params.get("booking") === "failed") {
-      toast.error("Payment failed or was cancelled.");
-      window.history.replaceState({}, "", "/mentorship");
-    }
-  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -592,7 +610,7 @@ const Mentorship = () => {
 
       {/* Booking Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Book Session with {selectedMentor?.name}</DialogTitle>
             <DialogDescription>
@@ -730,9 +748,9 @@ const Mentorship = () => {
             <Button
               variant="accent"
               onClick={handleSubmitBooking}
-              disabled={!formData.scheduled_at}
+              disabled={!formData.scheduled_at || bookingLoading}
             >
-              Proceed to Payment
+              {bookingLoading ? "Connecting..." : "Proceed to Payment"}
             </Button>
           </div>
         </DialogContent>

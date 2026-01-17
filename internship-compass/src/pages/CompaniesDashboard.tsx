@@ -89,7 +89,7 @@ const CompaniesDashboard = () => {
             >
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
-            </button>
+        </button>
         <div className="container mx-auto px-4 lg:px-8">
           {allCompanies.length === 0 ? (
             <div className="text-center py-20">

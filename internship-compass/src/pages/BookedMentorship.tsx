@@ -14,7 +14,7 @@ interface BookingDetails {
   mentorTitle: string;
   date: string;
   time: string;
-  zoomLink: string;
+  meetLink: string;
   amount: number;
 }
 
@@ -33,7 +33,7 @@ const BookedMentorship = () => {
         mentorTitle: params.get('mentorTitle') || 'Career Guide',
         date: params.get('date') || new Date().toISOString().split('T')[0],
         time: params.get('time') || 'TBD',
-        zoomLink: params.get('zoomLink') || 'No Zoom link available',
+        meetLink: params.get('meetLink') || 'No Google Meet link available',
         amount: parseFloat(params.get('amount') || '0'),
       };
 
@@ -43,7 +43,7 @@ const BookedMentorship = () => {
       toast.error("Payment failed or was cancelled.");
     }
 
-    // Clean URL after reading
+    // Clean URL after reading to keep it tidy
     window.history.replaceState({}, '', location.pathname);
   }, [location]);
 
@@ -57,12 +57,12 @@ const BookedMentorship = () => {
     });
   };
 
-  const copyZoomLink = () => {
-    if (booking?.zoomLink && booking.zoomLink !== 'No Zoom link available') {
-      navigator.clipboard.writeText(booking.zoomLink);
-      toast.success("Zoom link copied to clipboard!");
+  const copyMeetLink = () => {
+    if (booking?.meetLink && booking.meetLink !== 'No Google Meet link available') {
+      navigator.clipboard.writeText(booking.meetLink);
+      toast.success("Google Meet link copied to clipboard!");
     } else {
-      toast.info("No Zoom link available yet");
+      toast.info("No meeting link available yet");
     }
   };
 
@@ -153,23 +153,23 @@ const BookedMentorship = () => {
                   <div className="mt-12 p-6 bg-secondary/50 rounded-2xl border border-border">
                     <div className="flex items-center gap-3 mb-4">
                       <Video className="w-8 h-8 text-accent" />
-                      <h3 className="text-xl font-bold">Zoom Meeting Link</h3>
+                      <h3 className="text-xl font-bold">Google Meet Link</h3>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                       <a
-                        href={booking.zoomLink}
+                        href={booking.meetLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-accent hover:underline break-all text-sm"
                       >
-                        {booking.zoomLink}
+                        {booking.meetLink}
                       </a>
 
                       <Button
                         variant="accent"
                         size="sm"
-                        onClick={copyZoomLink}
+                        onClick={copyMeetLink}
                         className="ml-auto"
                       >
                         <Copy className="w-4 h-4 mr-2" />
@@ -196,7 +196,7 @@ const BookedMentorship = () => {
                     Your mentorship session has been booked.
                   </p>
                   <p className="text-muted-foreground mt-4">
-                    Check your email for the Zoom meeting link and session details.
+                    Check your email for the meeting link and session details.
                   </p>
                 </div>
               )}

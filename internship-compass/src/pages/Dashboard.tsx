@@ -49,6 +49,7 @@ import {
   Download,
   Calendar as CalendarIcon,
   Mail,
+  Video,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -75,8 +76,8 @@ interface Mentor {
   experience: number;
   rating: number | string;
   session_price: number | string;
-  zoom_email?: string | null;
-  user?: { email: string }; // for loaded relation
+  google_calendar_email?: string | null;
+  user?: { email: string };
 }
 
 interface Booking {
@@ -102,7 +103,7 @@ interface MentorBooking {
   scheduled_at: string;
   amount: number;
   status: string;
-  zoom_join_url?: string;
+  google_meet_link?: string;
   created_at: string;
 }
 
@@ -169,7 +170,7 @@ const Dashboard = () => {
     experience: 5,
     rating: 4.5,
     session_price: 200.00,
-    zoom_email: "",
+    google_calendar_email: "",
   });
 
   // Availability editor states
@@ -284,7 +285,8 @@ const Dashboard = () => {
 
     try {
       if (editingCompany) {
-        await api.put(`/api/companies/${editingCompany.id}`, formData);
+        // Using _method=PUT for multipart support in Laravel
+        await api.post(`/api/companies/${editingCompany.id}?_method=PUT`, formData);
         toast.success("Company updated successfully");
       } else {
         await api.post("/api/companies", formData);
@@ -333,7 +335,6 @@ const Dashboard = () => {
       return;
     }
 
-    // Client-side email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(mentorForm.email)) {
       toast.error("Please enter a valid email address");
@@ -349,12 +350,13 @@ const Dashboard = () => {
     formData.append("experience", mentorForm.experience.toString());
     formData.append("rating", mentorForm.rating.toString());
     formData.append("session_price", mentorForm.session_price.toString());
-    formData.append("zoom_email", mentorForm.zoom_email || "");
+    formData.append("google_calendar_email", mentorForm.google_calendar_email || "");
     if (mentorFile) formData.append("image", mentorFile);
 
     try {
       if (editingMentor) {
-        await api.put(`/api/mentors/${editingMentor.uuid}`, formData);
+        
+        await api.post(`/api/mentors/${editingMentor.uuid}?_method=PUT`, formData);
         toast.success("Mentor updated successfully");
       } else {
         await api.post("/api/mentors", formData);
@@ -371,7 +373,7 @@ const Dashboard = () => {
         experience: 5,
         rating: 4.5,
         session_price: 200.00,
-        zoom_email: "",
+        google_calendar_email: "",
       });
       setMentorFile(null);
       setMentorPreview(null);
@@ -380,19 +382,10 @@ const Dashboard = () => {
       const errorData = err.response?.data;
       if (errorData?.errors?.email) {
         const msg = errorData.errors.email[0];
-        if (msg.includes("taken")) {
-          toast.error("This email is already in use by a student or another mentor.");
-        } else if (msg.includes("required")) {
-          toast.error("Email address is required.");
-        } else {
-          toast.error(msg);
-        }
-      } else if (errorData?.message) {
-        toast.error(errorData.message);
+        toast.error(msg.includes("taken") ? "Email already in use." : msg);
       } else {
-        toast.error("Failed to save mentor. Please try again.");
+        toast.error(errorData?.message || "Failed to save mentor.");
       }
-      console.error("Mentor save error:", err);
     }
   };
 
@@ -407,7 +400,7 @@ const Dashboard = () => {
       experience: mentor.experience,
       rating: Number(mentor.rating),
       session_price: Number(mentor.session_price) || 200.00,
-      zoom_email: mentor.zoom_email || "",
+      google_calendar_email: mentor.google_calendar_email || "",
     });
     setMentorPreview(mentor.image ? `/${mentor.image}` : null);
     setMentorFile(null);
@@ -430,19 +423,15 @@ const Dashboard = () => {
     if (!booking) return;
 
     const confirmed = confirm(
-      `Approve ${booking.student_name}'s application?\n\n` +
-      `A payment link for GHS 2.00 will be sent to ${booking.student_email}.\n` +
-      `The student has 24 hours to complete payment.`
+      `Approve ${booking.student_name}'s application?\n\nA payment link will be sent to ${booking.student_email}.`
     );
 
     if (!confirmed) return;
 
     try {
       await api.post(`/api/admin/bookings/${bookingId}/approve`);
-      toast.success("Application approved! Payment link for GHS 2.00 sent.");
-      setBookings(bookings.map(b => 
-        b.id === bookingId ? { ...b, status: 'approved' as const } : b
-      ));
+      toast.success("Application approved!");
+      refreshData();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to approve application");
     }
@@ -452,74 +441,34 @@ const Dashboard = () => {
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
-    const reason = prompt(
-      `Reject ${booking.student_name}'s application?\n\n` +
-      `Please provide a reason (will be sent to the student):`,
-      ""
-    );
+    const reason = prompt("Please provide a reason for rejection (sent to student):", "");
 
     if (!reason || reason.trim().length < 10) {
       toast.error("Rejection reason must be at least 10 characters.");
       return;
     }
 
-    const confirmed = confirm(`Reject application with reason:\n"${reason.trim()}"`);
-    if (!confirmed) return;
-
     try {
       await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
-      toast.success("Application rejected and rejection email sent.");
-      setBookings(bookings.map(b => 
-        b.id === bookingId ? { ...b, status: 'rejected' as const } : b
-      ));
+      toast.success("Application rejected.");
+      refreshData();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to reject application");
     }
   };
 
   const stats = [
-    { 
-      icon: Building, 
-      label: "Companies", 
-      value: companies.length, 
-      color: "bg-primary",
-      onClick: () => navigate("/companies-dashboard")
-    },
+    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary", onClick: () => navigate("/companies-dashboard") },
     { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
-    { 
-      icon: CheckCircle, 
-      label: "Booked Slots", 
-      value: bookedSlots, 
-      color: "bg-blue-500",
-      onClick: () => navigate("/booked-slots")
-    },
-    { 
-      icon: Clock, 
-      label: "Pending Internships", 
-      value: pendingInternshipBookings, 
-      color: "bg-yellow-500",
-      onClick: () => navigate("/pending-applications")
-    },
+    { icon: CheckCircle, label: "Booked Slots", value: bookedSlots, color: "bg-blue-500", onClick: () => navigate("/booked-slots") },
+    { icon: Clock, label: "Pending Internships", value: pendingInternshipBookings, color: "bg-yellow-500", onClick: () => navigate("/pending-applications") },
     { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
-    { 
-      icon: UserCircle, 
-      label: "Mentors", 
-      value: mentors.length, 
-      color: "bg-muted-foreground",
-      onClick: () => navigate("/mentors-dashboard")
-    },
-    { 
-      icon: CalendarIcon, 
-      label: "Booked Mentorships (Paid)", 
-      value: bookedMentorships, 
-      color: "bg-purple-500",
-      onClick: () => navigate("/admin/mentorship-bookings")
-    },
+    { icon: UserCircle, label: "Mentors", value: mentors.length, color: "bg-muted-foreground", onClick: () => navigate("/mentors-dashboard") },
+    { icon: CalendarIcon, label: "Booked Mentorships", value: bookedMentorships, color: "bg-purple-500", onClick: () => navigate("/admin/mentorship-bookings") },
   ];
 
   const displayedCompanies = companies.slice(0, visibleCompanies);
   const displayedMentors = mentors.slice(0, visibleMentors);
-
   const hasMoreCompanies = visibleCompanies < companies.length;
   const hasMoreMentors = visibleMentors < mentors.length;
 
@@ -547,38 +496,22 @@ const Dashboard = () => {
 
       <section className="pt-24 lg:pt-32 pb-8 gradient-hero">
         <div className="container mx-auto px-4 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-2">
-              Admin Dashboard
-            </h1>
-            <p className="text-primary-foreground/80">
-              Manage companies, mentors, and internship applications
-            </p>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="text-center">
+            <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-2">Admin Dashboard</h1>
+            <p className="text-primary-foreground/80">Manage companies, mentors, and internship applications</p>
           </motion.div>
         </div>
       </section>
 
       <section className="py-8 -mt-8">
         <div className="container mx-auto px-4 lg:px-8">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3"
-          >
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
             {stats.map((stat) => (
               <motion.div
                 key={stat.label}
                 variants={itemVariants}
                 whileHover={{ scale: stat.onClick ? 1.05 : 1.02 }}
-                className={`bg-card rounded-xl p-6 mt-18 shadow-elevated border border-border text-center transition-all ${
-                  stat.onClick ? "cursor-pointer hover:shadow-xl" : ""
-                }`}
+                className={`bg-card rounded-xl p-6 mt-18 shadow-elevated border border-border text-center transition-all ${stat.onClick ? "cursor-pointer hover:shadow-xl" : ""}`}
                 onClick={stat.onClick}
               >
                 <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mx-auto mb-3`}>
@@ -596,35 +529,18 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 lg:px-8">
           <Tabs defaultValue="companies" className="space-y-6">
             <TabsList className="grid w-full max-w-lg grid-cols-4 mx-auto">
-              <TabsTrigger value="companies" className="flex items-center gap-2">
-                <Building className="h-4 w-4" /> Companies
-              </TabsTrigger>
-              <TabsTrigger value="mentors" className="flex items-center gap-2">
-                <Users className="h-4 w-4" /> Mentors
-              </TabsTrigger>
-              <TabsTrigger value="bookings" className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" /> Bookings
-              </TabsTrigger>
-              <TabsTrigger value="availability" className="flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4" /> Availability
-              </TabsTrigger>
+              <TabsTrigger value="companies" className="flex items-center gap-2"><Building className="h-4 w-4" /> Companies</TabsTrigger>
+              <TabsTrigger value="mentors" className="flex items-center gap-2"><Users className="h-4 w-4" /> Mentors</TabsTrigger>
+              <TabsTrigger value="bookings" className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Bookings</TabsTrigger>
+              <TabsTrigger value="availability" className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" /> Availability</TabsTrigger>
             </TabsList>
 
-            {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
                 <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button
-                      variant="accent"
-                      onClick={() => {
-                        setEditingCompany(null);
-                        setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 });
-                        setCompanyFile(null);
-                        setCompanyPreview(null);
-                      }}
-                    >
+                    <Button variant="accent" onClick={() => { setEditingCompany(null); setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 }); setCompanyFile(null); setCompanyPreview(null); }}>
                       <Plus className="h-4 w-4 mr-2" /> Add Company
                     </Button>
                   </DialogTrigger>
@@ -637,57 +553,25 @@ const Dashboard = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 md:col-span-1">
                           <Label>Company Name *</Label>
-                          <Input
-                            placeholder="Enter name"
-                            value={companyForm.name}
-                            onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
-                          />
+                          <Input placeholder="Enter name" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} />
                         </div>
                         <div className="col-span-2 md:col-span-1">
                           <Label>Industry *</Label>
-                          <Select
-                            value={companyForm.industry}
-                            onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select industry" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {INDUSTRIES.map((ind) => (
-                                <SelectItem key={ind} value={ind}>{ind}</SelectItem>
-                              ))}
-                            </SelectContent>
+                          <Select value={companyForm.industry} onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}>
+                            <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
+                            <SelectContent>{INDUSTRIES.map((ind) => (<SelectItem key={ind} value={ind}>{ind}</SelectItem>))}</SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div>
                         <Label>Company Logo</Label>
                         <div className="mt-2 flex items-center gap-4">
-                          <div
-                            className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer"
-                            onClick={() => companyFileInputRef.current?.click()}
-                          >
-                            {companyPreview ? (
-                              <img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                              <ImageIcon className="text-muted-foreground w-6 h-6" />
-                            )}
+                          <div className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer" onClick={() => companyFileInputRef.current?.click()}>
+                            {companyPreview ? (<img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />) : (<ImageIcon className="text-muted-foreground w-6 h-6" />)}
                           </div>
                           <div className="flex-1">
-                            <Input
-                              type="file"
-                              accept="image/*"
-                              ref={companyFileInputRef}
-                              className="hidden"
-                              onChange={handleCompanyImageChange}
-                            />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => companyFileInputRef.current?.click()}
-                            >
+                            <Input type="file" accept="image/*" ref={companyFileInputRef} className="hidden" onChange={handleCompanyImageChange} />
+                            <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => companyFileInputRef.current?.click()}>
                               <Upload className="h-4 w-4 mr-2" /> Upload Logo
                             </Button>
                           </div>
@@ -695,36 +579,20 @@ const Dashboard = () => {
                       </div>
                       <div>
                         <Label>Location</Label>
-                        <Input
-                          placeholder="e.g. San Francisco, CA"
-                          value={companyForm.location}
-                          onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
-                        />
+                        <Input placeholder="e.g. San Francisco, CA" value={companyForm.location} onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })} />
                       </div>
                       <div>
                         <Label>Description</Label>
-                        <Textarea
-                          placeholder="Briefly describe the company..."
-                          value={companyForm.description}
-                          onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })}
-                        />
+                        <Textarea placeholder="Briefly describe the company..." value={companyForm.description} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Total Slots</Label>
-                          <Input
-                            type="number"
-                            value={companyForm.total_slots}
-                            onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })}
-                          />
+                          <Input type="number" value={companyForm.total_slots} onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })} />
                         </div>
                         <div>
                           <Label>Available Slots</Label>
-                          <Input
-                            type="number"
-                            value={companyForm.available_slots}
-                            onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })}
-                          />
+                          <Input type="number" value={companyForm.available_slots} onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })} />
                         </div>
                       </div>
                       <Button variant="accent" className="w-full" onClick={handleSaveCompany}>
@@ -749,36 +617,20 @@ const Dashboard = () => {
                     </thead>
                     <tbody>
                       {displayedCompanies.map((company, index) => (
-                        <motion.tr
-                          key={company.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="border-t border-border hover:bg-secondary/50 transition-colors"
-                        >
+                        <motion.tr key={company.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="border-t border-border hover:bg-secondary/50 transition-colors">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              {company.logo ? (
-                                <img src={`/${company.logo}`} alt={company.name} className="w-8 h-8 rounded object-cover border border-border" />
-                              ) : (
-                                <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs">Building</div>
-                              )}
+                              {company.logo ? (<img src={`/${company.logo}`} alt={company.name} className="w-8 h-8 rounded object-cover border border-border" />) : (<div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs">Building</div>)}
                               <span className="font-medium">{company.name}</span>
                             </div>
                           </td>
                           <td className="p-4 text-muted-foreground hidden md:table-cell">{company.industry}</td>
                           <td className="p-4 text-muted-foreground hidden md:table-cell">{company.location || "-"}</td>
-                          <td className="p-4 text-center">
-                            <span className="text-accent font-semibold">{company.available_slots}</span>/{company.total_slots}
-                          </td>
+                          <td className="p-4 text-center"><span className="text-accent font-semibold">{company.available_slots}</span>/{company.total_slots}</td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => handleEditCompany(company)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCompany(company.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEditCompany(company)}><Pencil className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCompany(company.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </div>
                           </td>
                         </motion.tr>
@@ -787,41 +639,17 @@ const Dashboard = () => {
                   </table>
                 </div>
               </div>
-
               {hasMoreCompanies && (
-                <div className="text-center">
-                  <Button variant="accent" size="lg" onClick={loadMoreCompanies}>
-                    Load More Companies
-                  </Button>
-                </div>
+                <div className="text-center"><Button variant="accent" size="lg" onClick={loadMoreCompanies}>Load More Companies</Button></div>
               )}
             </TabsContent>
 
-            {/* Mentors Tab */}
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Mentors</h2>
                 <Dialog open={mentorDialogOpen} onOpenChange={setMentorDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button
-                      variant="accent"
-                      onClick={() => {
-                        setEditingMentor(null);
-                        setMentorForm({
-                          name: "",
-                          email: "",
-                          title: "",
-                          specialization: "",
-                          bio: "",
-                          experience: 5,
-                          rating: 4.5,
-                          session_price: 200.00,
-                          zoom_email: ""
-                        });
-                        setMentorFile(null);
-                        setMentorPreview(null);
-                      }}
-                    >
+                    <Button variant="accent" onClick={() => { setEditingMentor(null); setMentorForm({ name: "", email: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5, session_price: 200.00, google_calendar_email: "" }); setMentorFile(null); setMentorPreview(null); }}>
                       <Plus className="h-4 w-4 mr-2" /> Add Mentor
                     </Button>
                   </DialogTrigger>
@@ -832,199 +660,67 @@ const Dashboard = () => {
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
                       <div className="flex flex-col items-center mb-4">
-                        <div
-                          className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2"
-                          onClick={() => mentorFileInputRef.current?.click()}
-                        >
-                          {mentorPreview ? (
-                            <img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />
-                          ) : (
-                            <User className="text-muted-foreground w-10 h-10" />
-                          )}
+                        <div className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2" onClick={() => mentorFileInputRef.current?.click()}>
+                          {mentorPreview ? (<img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />) : (<User className="text-muted-foreground w-10 h-10" />)}
                         </div>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          ref={mentorFileInputRef}
-                          className="hidden"
-                          onChange={handleMentorImageChange}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => mentorFileInputRef.current?.click()}
-                        >
-                          Change Photo
-                        </Button>
+                        <Input type="file" accept="image/*" ref={mentorFileInputRef} className="hidden" onChange={handleMentorImageChange} />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => mentorFileInputRef.current?.click()}>Change Photo</Button>
                       </div>
-
-                      {/* Email field - now required and visible */}
                       <div>
                         <Label>Email Address (login & notifications) *</Label>
                         <div className="relative mt-2">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                          <Input
-                            type="email"
-                            placeholder="mentor@example.com"
-                            value={mentorForm.email}
-                            onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })}
-                            className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
-                            required
-                          />
+                          <Input type="email" placeholder="mentor@example.com" value={mentorForm.email} onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })} className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary" required />
                         </div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Name *</Label>
-                          <Input
-                            placeholder="Full Name"
-                            value={mentorForm.name}
-                            onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Job Title *</Label>
-                          <Input
-                            placeholder="e.g. Senior Developer"
-                            value={mentorForm.title}
-                            onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })}
-                          />
-                        </div>
+                        <div><Label>Name *</Label><Input placeholder="Full Name" value={mentorForm.name} onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })} /></div>
+                        <div><Label>Job Title *</Label><Input placeholder="e.g. Senior Developer" value={mentorForm.title} onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })} /></div>
                       </div>
-
-                      <div>
-                        <Label>Specialization</Label>
-                        <Input
-                          placeholder="e.g. Frontend Architecture"
-                          value={mentorForm.specialization}
-                          onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
-                        />
-                      </div>
-
-                      <div>
-                        <Label>Bio</Label>
-                        <Textarea
-                          placeholder="Mentor's professional background..."
-                          value={mentorForm.bio}
-                          onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
-                        />
-                      </div>
-
+                      <div><Label>Specialization</Label><Input placeholder="e.g. Frontend Architecture" value={mentorForm.specialization} onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })} /></div>
+                      <div><Label>Bio</Label><Textarea placeholder="Mentor's professional background..." value={mentorForm.bio} onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })} /></div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Experience (years)</Label>
-                          <Input
-                            type="number"
-                            value={mentorForm.experience}
-                            onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Rating</Label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="5"
-                            value={mentorForm.rating}
-                            onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })}
-                          />
-                        </div>
+                        <div><Label>Experience (years)</Label><Input type="number" value={mentorForm.experience} onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })} /></div>
+                        <div><Label>Rating</Label><Input type="number" step="0.1" min="0" max="5" value={mentorForm.rating} onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })} /></div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Session Price (GHS) *</Label><Input type="number" step="0.01" value={mentorForm.session_price} onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })} placeholder="200.00" /></div>
                         <div>
-                          <Label>Session Price (GHS) *</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={mentorForm.session_price}
-                            onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })}
-                            placeholder="200.00"
-                          />
-                        </div>
-                        <div>
-                          <Label>Zoom Email (for auto meeting creation)</Label>
-                          <Input
-                            type="email"
-                            placeholder="mentor@company.com"
-                            value={mentorForm.zoom_email}
-                            onChange={(e) => setMentorForm({ ...mentorForm, zoom_email: e.target.value })}
-                          />
+                          <Label>Google Calendar Email (for auto Meet creation)</Label>
+                          <Input type="email" placeholder="mentor@gmail.com" value={mentorForm.google_calendar_email} onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })} />
                         </div>
                       </div>
-
-                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
-                        {editingMentor ? "Update Mentor" : "Add Mentor"}
-                      </Button>
+                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>{editingMentor ? "Update Mentor" : "Add Mentor"}</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
               </motion.div>
 
-              <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
-              >
+              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {displayedMentors.map((mentor) => (
-                  <motion.div
-                    key={mentor.id}
-                    variants={itemVariants}
-                    whileHover={{ y: -4 }}
-                    className="bg-card rounded-xl p-6 shadow-soft border border-border"
-                  >
+                  <motion.div key={mentor.id} variants={itemVariants} whileHover={{ y: -4 }} className="bg-card rounded-xl p-6 shadow-soft border border-border">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        {mentor.image ? (
-                          <img src={`/${mentor.image}`} alt={mentor.name} className="w-12 h-12 rounded-full object-cover border border-border" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>
-                        )}
-                        <div>
-                          <h3 className="font-semibold">{mentor.name}</h3>
-                          <p className="text-sm text-accent">{mentor.title}</p>
-                        </div>
+                        {mentor.image ? (<img src={`/${mentor.image}`} alt={mentor.name} className="w-12 h-12 rounded-full object-cover border border-border" />) : (<div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>)}
+                        <div><h3 className="font-semibold">{mentor.name}</h3><p className="text-sm text-accent">{mentor.title}</p></div>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">{mentor.specialization || "General"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}</p>
                   </motion.div>
                 ))}
               </motion.div>
-
               {hasMoreMentors && (
-                <div className="text-center">
-                  <Button variant="accent" size="lg" onClick={loadMoreMentors}>
-                    Load More Mentors
-                  </Button>
-                </div>
+                <div className="text-center"><Button variant="accent" size="lg" onClick={loadMoreMentors}>Load More Mentors</Button></div>
               )}
             </TabsContent>
 
-            {/* Bookings Tab (Internships) */}
             <TabsContent value="bookings" className="space-y-8">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between"
-              >
-                <h2 className="text-2xl font-bold">Internship Applications</h2> 
-              </motion.div>
-
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between"><h2 className="text-2xl font-bold">Internship Applications</h2></motion.div>
               <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -1041,61 +737,20 @@ const Dashboard = () => {
                     </thead>
                     <tbody>
                       {bookings.map((booking, index) => (
-                        <motion.tr
-                          key={booking.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="border-t border-border hover:bg-secondary/50 transition-colors"
-                        >
-                          <td className="p-4">
-                            <div>
-                              <span className="font-medium">{booking.student_name}</span>
-                              <p className="text-sm text-muted-foreground">{booking.university}</p>
-                            </div>
-                          </td>
+                        <motion.tr key={booking.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="border-t border-border hover:bg-secondary/50 transition-colors">
+                          <td className="p-4"><div><span className="font-medium">{booking.student_name}</span><p className="text-sm text-muted-foreground">{booking.university}</p></div></td>
                           <td className="p-4">{booking.company.name}</td>
                           <td className="p-4 hidden md:table-cell">{booking.student_email}</td>
-                          <td className="p-4 hidden lg:table-cell">
-                            {new Date(booking.created_at).toLocaleDateString()}
-                          </td>
+                          <td className="p-4 hidden lg:table-cell">{new Date(booking.created_at).toLocaleDateString()}</td>
                           <td className="p-4 text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              booking.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                              booking.status === 'paid' ? 'bg-green-100 text-green-800' :
-                              booking.status === 'expired' ? 'bg-gray-100 text-gray-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                            </span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : booking.status === 'approved' ? 'bg-blue-100 text-blue-800' : booking.status === 'paid' ? 'bg-green-100 text-green-800' : booking.status === 'expired' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
                           </td>
-                          <td className="p-4 text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openCvModal(booking)}
-                            >
-                              <FileText className="h-4 w-4 mr-2" /> View CV
-                            </Button>
-                          </td>
+                          <td className="p-4 text-center"><Button variant="ghost" size="sm" onClick={() => openCvModal(booking)}><FileText className="h-4 w-4 mr-2" /> View CV</Button></td>
                           <td className="p-4 text-right">
                             {booking.status === 'pending' && (
                               <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  variant="accent"
-                                  size="sm"
-                                  onClick={() => handleApproveBooking(booking.id)}
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-2" /> Approve
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleRejectBooking(booking.id)}
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" /> Reject
-                                </Button>
+                                <Button variant="accent" size="sm" onClick={() => handleApproveBooking(booking.id)}><CheckCircle className="h-4 w-4 mr-2" /> Approve</Button>
+                                <Button variant="destructive" size="sm" onClick={() => handleRejectBooking(booking.id)}><XCircle className="h-4 w-4 mr-2" /> Reject</Button>
                               </div>
                             )}
                           </td>
@@ -1105,23 +760,11 @@ const Dashboard = () => {
                   </table>
                 </div>
               </div>
-
               {bookings.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-16"
-                >
-                  <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">No applications yet</h3>
-                  <p className="text-muted-foreground">
-                    Applications will appear here when students apply
-                  </p>
-                </motion.div>
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16"><BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" /><h3 className="text-xl font-semibold mb-2">No applications yet</h3><p className="text-muted-foreground">Applications will appear here when students apply</p></motion.div>
               )}
             </TabsContent>
 
-            {/* Availability Tab */}
             <TabsContent value="availability" className="space-y-8">
               <div>
                 <h2 className="text-2xl font-bold mb-6">Mentor Weekly Availability</h2>
@@ -1129,27 +772,10 @@ const Dashboard = () => {
                   {mentors.map(mentor => (
                     <div key={mentor.id} className="bg-card p-6 rounded-xl border border-border">
                       <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className="font-semibold text-lg">{mentor.name}</h3>
-                          <p className="text-sm text-muted-foreground">{mentor.title}</p>
-                        </div>
-                        <Button 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedMentorForAvailability(mentor);
-                            setAvailabilityForm({
-                              selectedDays: [],
-                              start_time: "09:00",
-                              end_time: "17:00"
-                            });
-                          }}
-                        >
-                          Set Schedule
-                        </Button>
+                        <div><h3 className="font-semibold text-lg">{mentor.name}</h3><p className="text-sm text-muted-foreground">{mentor.title}</p></div>
+                        <Button size="sm" onClick={() => { setSelectedMentorForAvailability(mentor); setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" }); }}>Set Schedule</Button>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Configure recurring weekly slots
-                      </p>
+                      <p className="text-sm text-muted-foreground">Configure recurring weekly slots</p>
                     </div>
                   ))}
                 </div>
@@ -1162,163 +788,53 @@ const Dashboard = () => {
       {/* Availability Editor Dialog */}
       <Dialog open={!!selectedMentorForAvailability} onOpenChange={() => setSelectedMentorForAvailability(null)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Set Weekly Availability - {selectedMentorForAvailability?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Define recurring time slots. You can apply the same hours to multiple days.
-            </DialogDescription>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>Set Weekly Availability - {selectedMentorForAvailability?.name}</DialogTitle><DialogDescription>Define recurring time slots. You can apply the same hours to multiple days.</DialogDescription></DialogHeader>
           <div className="space-y-6 py-4">
             <div>
               <Label>Select Days</Label>
               <div className="grid grid-cols-7 gap-2 mt-3">
                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
-                  <Button
-                    key={day}
-                    variant={availabilityForm.selectedDays.includes(index + 1) ? "default" : "outline"}
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      const days = availabilityForm.selectedDays;
-                      if (days.includes(index + 1)) {
-                        setAvailabilityForm({ ...availabilityForm, selectedDays: days.filter(d => d !== index + 1) });
-                      } else {
-                        setAvailabilityForm({ ...availabilityForm, selectedDays: [...days, index + 1] });
-                      }
-                    }}
-                  >
-                    {day}
-                  </Button>
+                  <Button key={day} variant={availabilityForm.selectedDays.includes(index + 1) ? "default" : "outline"} size="sm" className="w-full" onClick={() => {
+                    const days = availabilityForm.selectedDays;
+                    if (days.includes(index + 1)) { setAvailabilityForm({ ...availabilityForm, selectedDays: days.filter(d => d !== index + 1) }); } else { setAvailabilityForm({ ...availabilityForm, selectedDays: [...days, index + 1] }); }
+                  }}>{day}</Button>
                 ))}
               </div>
-
               <div className="mt-4 flex flex-wrap gap-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5] })}
-                >
-                  Weekdays (Mon–Fri)
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [6,7] })}
-                >
-                  Weekend
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5,6,7] })}
-                >
-                  All Week
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [] })}
-                >
-                  Clear
-                </Button>
+                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5] })}>Weekdays (Mon–Fri)</Button>
+                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [6,7] })}>Weekend</Button>
+                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5,6,7] })}>All Week</Button>
+                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [] })}>Clear</Button>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Start Time</Label>
-                <Input 
-                  type="time" 
-                  value={availabilityForm.start_time} 
-                  onChange={e => setAvailabilityForm({...availabilityForm, start_time: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label>End Time</Label>
-                <Input 
-                  type="time" 
-                  value={availabilityForm.end_time} 
-                  onChange={e => setAvailabilityForm({...availabilityForm, end_time: e.target.value})}
-                />
-              </div>
+              <div><Label>Start Time</Label><Input type="time" value={availabilityForm.start_time} onChange={e => setAvailabilityForm({...availabilityForm, start_time: e.target.value})} /></div>
+              <div><Label>End Time</Label><Input type="time" value={availabilityForm.end_time} onChange={e => setAvailabilityForm({...availabilityForm, end_time: e.target.value})} /></div>
             </div>
-
-            <Button 
-              className="w-full"
-              disabled={availabilityForm.selectedDays.length === 0}
-              onClick={async () => {
-                if (!selectedMentorForAvailability || availabilityForm.selectedDays.length === 0) return;
-
-                try {
-                  const dayNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-                  const requests = availabilityForm.selectedDays.map(dayIndex => {
-                    const dayName = dayNames[dayIndex - 1];
-                    return api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, {
-                      day_of_week: dayName,
-                      start_time: availabilityForm.start_time,
-                      end_time: availabilityForm.end_time
-                    });
-                  });
-
-                  await Promise.all(requests);
-                  toast.success(`Availability set for ${availabilityForm.selectedDays.length} day(s)`);
-                  setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" });
-                } catch (err) {
-                  toast.error("Failed to save availability");
-                }
-              }}
-            >
-              Apply to Selected Days
-            </Button>
+            <Button className="w-full" disabled={availabilityForm.selectedDays.length === 0} onClick={async () => {
+              if (!selectedMentorForAvailability || availabilityForm.selectedDays.length === 0) return;
+              try {
+                const dayNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+                const requests = availabilityForm.selectedDays.map(dayIndex => {
+                  return api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, { day_of_week: dayNames[dayIndex - 1], start_time: availabilityForm.start_time, end_time: availabilityForm.end_time });
+                });
+                await Promise.all(requests);
+                toast.success(`Availability set for ${availabilityForm.selectedDays.length} day(s)`);
+                setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" });
+              } catch (err) { toast.error("Failed to save availability"); }
+            }}>Apply to Selected Days</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* CV Viewer Modal */}
       <Dialog open={cvModalOpen} onOpenChange={setCvModalOpen}>
-        <DialogContent 
-          className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col"
-          aria-describedby={undefined}
-        >
+        <DialogContent className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col" aria-describedby={undefined}>
           <DialogHeader className="p-6 pb-3 flex flex-row items-center justify-between border-b bg-card">
-            <div>
-              <DialogTitle className="text-xl">
-                CV - {currentStudentName}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground">
-                Application for {currentCompanyName}
-              </DialogDescription>
-            </div>
-            {currentCvPath && (
-              <Button variant="outline" size="sm" asChild>
-                <a
-                  href={getCvUrl(currentCvPath)}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Download className="h-4 w-4 mr-2" /> Download PDF
-                </a>
-              </Button>
-            )}
+            <div><DialogTitle className="text-xl">CV - {currentStudentName}</DialogTitle><DialogDescription className="text-sm text-muted-foreground">Application for {currentCompanyName}</DialogDescription></div>
+            {currentCvPath && (<Button variant="outline" size="sm" asChild><a href={getCvUrl(currentCvPath)} download target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4 mr-2" /> Download PDF</a></Button>)}
           </DialogHeader>
-          <div className="flex-1 overflow-hidden bg-gray-50">
-            {currentCvPath ? (
-              <iframe
-                src={getCvUrl(currentCvPath)}
-                className="w-full h-full"
-                title="CV Viewer"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <FileText className="w-16 h-16 mb-4 opacity-50" />
-                <p>No CV uploaded</p>
-              </div>
-            )}
-          </div>
+          <div className="flex-1 overflow-hidden bg-gray-50">{currentCvPath ? (<iframe src={getCvUrl(currentCvPath)} className="w-full h-full" title="CV Viewer" />) : (<div className="flex flex-col items-center justify-center h-full text-muted-foreground"><FileText className="w-16 h-16 mb-4 opacity-50" /><p>No CV uploaded</p></div>)}</div>
         </DialogContent>
       </Dialog>
 

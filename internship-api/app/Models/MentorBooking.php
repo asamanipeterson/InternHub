@@ -20,16 +20,15 @@ class MentorBooking extends Model
         'paystack_reference',
         'amount',
         'currency',
-        'zoom_meeting_id',
-        'zoom_join_url',
-        'zoom_start_url',
+        'google_meet_link',          // Replaced Zoom
+        'google_calendar_event_id',  // Replaced Zoom
         'status',
         'payment_expires_at',
     ];
 
-    protected $dates = [
-        'scheduled_at',
-        'payment_expires_at',
+    protected $casts = [
+        'scheduled_at' => 'datetime',
+        'payment_expires_at' => 'datetime',
     ];
 
     public function mentor()
@@ -41,6 +40,7 @@ class MentorBooking extends Model
     {
         return $this->belongsTo(User::class);
     }
+
     public function student()
     {
         return $this->belongsTo(User::class, 'user_id');

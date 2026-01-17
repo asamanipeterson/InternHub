@@ -1,5 +1,4 @@
 <?php
-// app/Mail/MentorBookingConfirmed.php
 
 namespace App\Mail;
 
@@ -17,42 +16,31 @@ class MentorBookingConfirmed extends Mailable implements ShouldQueue
 
     public $booking;
 
-    /**
-     * Create a new message instance.
-     */
     public function __construct(MentorBooking $booking)
     {
-        $this->booking = $booking;
+        // Load mentor relationship to ensure we have the name in the view
+        $this->booking = $booking->load('mentor');
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your Mentorship Session is Confirmed!',
+            subject: 'Confirmed: Mentorship Session with ' . $this->booking->mentor->name,
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
             view: 'emails.mentor_booking_confirmed',
             with: [
                 'booking' => $this->booking,
+                // Using the safe config call
+                'frontendUrl' => config('app.frontend_url'),
             ]
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
         return [];

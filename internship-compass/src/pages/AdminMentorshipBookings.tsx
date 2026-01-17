@@ -26,14 +26,14 @@ interface MentorshipBooking {
   time: string;
   amount: string | number;
   status: string;
-  zoom_join_url: string | null;
+  google_meet_link: string | null;   // ← Changed from zoom_join_url
   created_at: string;
 }
 
 const AdminMentorshipBookings = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<MentorshipBooking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);   // ← fixed here
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -117,7 +117,7 @@ const AdminMentorshipBookings = () => {
                         <th className="text-left p-4 font-medium">Time</th>
                         <th className="text-left p-4 font-medium">Amount</th>
                         <th className="text-left p-4 font-medium">Status</th>
-                        <th className="text-center p-4 font-medium">Zoom</th>
+                        <th className="text-center p-4 font-medium">Google Meet</th> {/* ← Changed header */}
                       </tr>
                     </thead>
                     <tbody>
@@ -202,15 +202,15 @@ const AdminMentorshipBookings = () => {
                             </td>
 
                             <td className="p-4 text-center">
-                              {booking.zoom_join_url ? (
+                              {booking.google_meet_link ? (   // ← Changed field name
                                 <a
-                                  href={booking.zoom_join_url}
+                                  href={booking.google_meet_link}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-accent hover:underline inline-flex items-center gap-1"
                                 >
                                   <Video className="w-4 h-4" />
-                                  Join
+                                  Join Google Meet
                                 </a>
                               ) : (
                                 <span className="text-muted-foreground">N/A</span>
