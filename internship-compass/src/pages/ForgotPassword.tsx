@@ -1,3 +1,4 @@
+// src/pages/ForgotPassword.tsx  (or wherever this component lives)
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
@@ -7,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Mail, ArrowLeft, Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { forgotPassword, resetPassword } from "@/lib/auth";
+import PasswordStrength from "@/components/PasswordStrength";   // ← Import here
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -22,6 +24,9 @@ const ForgotPassword = () => {
     password: "",
     password_confirmation: "",
   });
+
+  // Watch the password value for strength indicator
+  const passwordValue = formData.password;
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,7 +180,7 @@ const ForgotPassword = () => {
 
                 <div className="space-y-6 pt-6 border-t border-border">
                   <div className="space-y-3">
-                    <Label htmlFor="password" self-className="text-lg font-bold">New Password</Label>
+                    <Label htmlFor="password" className="text-lg font-bold">New Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                       <Input
@@ -184,17 +189,20 @@ const ForgotPassword = () => {
                         required
                         value={formData.password}
                         onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        className="pl-10 h-14 text-lg"
+                        className="pl-10 pr-12 h-14 text-lg"
                         placeholder="••••••••"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
+
+                    {/* ── Password Strength Indicator ── */}
+                    <PasswordStrength password={passwordValue} />
                   </div>
 
                   <div className="space-y-3">

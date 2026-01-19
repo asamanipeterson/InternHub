@@ -63,6 +63,8 @@ interface Company {
   location: string | null;
   total_slots: number;
   available_slots: number;
+  is_paid: boolean;         // ← added
+  requirements: string | null; // ← added
 }
 
 interface Mentor {
@@ -108,6 +110,7 @@ interface MentorBooking {
 }
 
 const ITEMS_PER_PAGE = 10;
+const REFRESH_INTERVAL = 10000; // 10 seconds - auto refresh
 
 const INDUSTRIES = [
   "Technology", "Finance", "Energy", "HealthCare", "Arts & Design", "Education", "Manufacturing",
@@ -154,6 +157,8 @@ const Dashboard = () => {
     location: "",
     total_slots: 5,
     available_slots: 5,
+    is_paid: true,           // ← added
+    requirements: "",        // ← added
   });
 
   // Mentor dialog states
@@ -219,6 +224,10 @@ const Dashboard = () => {
       }
     };
     fetchData();
+
+    // Auto-refresh every 25 seconds
+    const interval = setInterval(fetchData, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
   }, []);
 
   const handleCompanyImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,11 +290,12 @@ const Dashboard = () => {
     formData.append("location", companyForm.location || "");
     formData.append("total_slots", companyForm.total_slots.toString());
     formData.append("available_slots", companyForm.available_slots.toString());
+    formData.append("is_paid", companyForm.is_paid ? "1" : "0");           // ← added
+    formData.append("requirements", companyForm.requirements || "");       // ← added
     if (companyFile) formData.append("logo", companyFile);
 
     try {
       if (editingCompany) {
-        // Using _method=PUT for multipart support in Laravel
         await api.post(`/api/companies/${editingCompany.id}?_method=PUT`, formData);
         toast.success("Company updated successfully");
       } else {
@@ -294,7 +304,16 @@ const Dashboard = () => {
       }
       setCompanyDialogOpen(false);
       setEditingCompany(null);
-      setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 });
+      setCompanyForm({ 
+        name: "", 
+        industry: "", 
+        description: "", 
+        location: "", 
+        total_slots: 5, 
+        available_slots: 5,
+        is_paid: true,           // ← added
+        requirements: ""         // ← added
+      });
       setCompanyFile(null);
       setCompanyPreview(null);
       await refreshData();
@@ -312,6 +331,8 @@ const Dashboard = () => {
       location: company.location || "",
       total_slots: company.total_slots,
       available_slots: company.available_slots,
+      is_paid: company.is_paid ?? true,           // ← added
+      requirements: company.requirements || "",   // ← added
     });
     setCompanyPreview(company.logo ? `/${company.logo}` : null);
     setCompanyFile(null);
@@ -355,7 +376,6 @@ const Dashboard = () => {
 
     try {
       if (editingMentor) {
-        
         await api.post(`/api/mentors/${editingMentor.uuid}?_method=PUT`, formData);
         toast.success("Mentor updated successfully");
       } else {
@@ -540,7 +560,21 @@ const Dashboard = () => {
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
                 <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="accent" onClick={() => { setEditingCompany(null); setCompanyForm({ name: "", industry: "", description: "", location: "", total_slots: 5, available_slots: 5 }); setCompanyFile(null); setCompanyPreview(null); }}>
+                    <Button variant="accent" onClick={() => { 
+                      setEditingCompany(null); 
+                      setCompanyForm({ 
+                        name: "", 
+                        industry: "", 
+                        description: "", 
+                        location: "", 
+                        total_slots: 5, 
+                        available_slots: 5,
+                        is_paid: true,           // ← added default
+                        requirements: ""         // ← added default
+                      }); 
+                      setCompanyFile(null); 
+                      setCompanyPreview(null); 
+                    }}>
                       <Plus className="h-4 w-4 mr-2" /> Add Company
                     </Button>
                   </DialogTrigger>
@@ -563,6 +597,31 @@ const Dashboard = () => {
                           </Select>
                         </div>
                       </div>
+
+                      {/* Added fields - same style as others */}
+                      <div>
+                        <Label>Paid Internship? *</Label>
+                        <select
+                          value={companyForm.is_paid ? "yes" : "no"}
+                          onChange={(e) => setCompanyForm({ ...companyForm, is_paid: e.target.value === "yes" })}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="yes">Yes – Paid internship</option>
+                          <option value="no">No – Unpaid / Volunteer</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <Label>Internship Requirements</Label>
+                        <Textarea
+                          placeholder="One requirement per line (will be shown as numbered list)\nExample:\nPursuing Computer Science degree\nKnowledge of React\nGood communication skills"
+                          value={companyForm.requirements}
+                          onChange={(e) => setCompanyForm({ ...companyForm, requirements: e.target.value })}
+                          rows={4}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">One per line</p>
+                      </div>
+
                       <div>
                         <Label>Company Logo</Label>
                         <div className="mt-2 flex items-center gap-4">
@@ -643,6 +702,11 @@ const Dashboard = () => {
                 <div className="text-center"><Button variant="accent" size="lg" onClick={loadMoreCompanies}>Load More Companies</Button></div>
               )}
             </TabsContent>
+
+            {/* ──────────────────────────────────────────────── */}
+            {/* The rest of your file remains EXACTLY the same */}
+            {/* Mentors tab, Bookings tab, Availability tab, dialogs, CV modal, etc. */}
+            {/* ──────────────────────────────────────────────── */}
 
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
@@ -840,7 +904,7 @@ const Dashboard = () => {
 
       <Footer />
     </div>
-  );
+  ); 
 };
 
 export default Dashboard;

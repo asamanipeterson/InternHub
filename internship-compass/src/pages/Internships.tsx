@@ -16,9 +16,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn } from "lucide-react";
+import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, DollarSign, XCircle } from "lucide-react";
 import api from "@/lib/api";
-import {Link }from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface Company {
   id: string;
@@ -29,9 +29,12 @@ interface Company {
   location: string | null;
   total_slots: number;
   available_slots: number;
+  is_paid: boolean;
+  requirements: string | null;
 }
 
 const ITEMS_PER_PAGE = 9;
+const REFRESH_INTERVAL = 10000; // 10 seconds
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -87,6 +90,9 @@ const Internships = () => {
     };
 
     fetchCompanies();
+
+    const interval = setInterval(fetchCompanies, REFRESH_INTERVAL);
+    return () => clearInterval(interval);
   }, []);
 
   const industries = ["all", ...Array.from(new Set(allCompanies.map((c) => c.industry)))];
@@ -94,8 +100,10 @@ const Internships = () => {
   const filteredCompanies = allCompanies.filter((company) => {
     const matchesSearch =
       company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (company.description && company.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      company.industry.toLowerCase().includes(searchTerm.toLowerCase());
+      (company.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      company.industry.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (company.requirements?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
+
     const matchesIndustry = selectedIndustry === "all" || company.industry === selectedIndustry;
     return matchesSearch && matchesIndustry;
   });
@@ -125,7 +133,7 @@ const Internships = () => {
     bookingData.append("student_phone", formData.studentPhone);
     bookingData.append("student_id", formData.studentId);
     bookingData.append("university", formData.university);
-    bookingData.append("cv", formData.cv);
+    bookingData.append("cv", formData.cv!);
 
     try {
       await api.post("/api/bookings", bookingData, {
@@ -211,7 +219,7 @@ const Internships = () => {
               </p>
               <Link to="/auth">
                 <Button variant="accent" size="lg" className="px-10 py-6 text-lg">
-                Register
+                  Register
                 </Button>
               </Link>
             </motion.div>
@@ -271,7 +279,8 @@ const Internships = () => {
                 transition={{ delay: 0.5 }}
                 className="text-muted-foreground mb-6"
               >
-                Showing {displayedCompanies.length} of {filteredCompanies.length} {filteredCompanies.length === 1 ? "company" : "companies"}
+                Showing {displayedCompanies.length} of {filteredCompanies.length}{" "}
+                {filteredCompanies.length === 1 ? "company" : "companies"} • Auto-refresh every 25s
               </motion.p>
 
               <motion.div
@@ -291,26 +300,47 @@ const Internships = () => {
                       transition={{ duration: 0.3 }}
                       className="bg-card rounded-2xl p-6 shadow-soft hover:shadow-elevated transition-all duration-300 border border-border"
                     >
-                      <div className="flex items-center gap-4 mb-4">
-                        <motion.div
-                          whileHover={{ rotate: [0, -10, 10, 0] }}
-                          transition={{ duration: 0.5 }}
-                          className="w-14 h-14 bg-secondary rounded-xl flex items-center justify-center overflow-hidden"
-                        >
-                          {company.logo ? (
-                            <img
-                              src={`/${company.logo}`}
-                              alt={company.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-3xl">🏢</span>
-                          )}
-                        </motion.div>
-                        <div>
-                          <h3 className="font-semibold text-lg text-foreground">{company.name}</h3>
-                          <p className="text-accent text-sm font-medium">{company.industry}</p>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4">
+                          <motion.div
+                            whileHover={{ rotate: [0, -10, 10, 0] }}
+                            transition={{ duration: 0.5 }}
+                            className="w-14 h-14 bg-secondary rounded-xl flex items-center justify-center overflow-hidden"
+                          >
+                            {company.logo ? (
+                              <img
+                                src={`/${company.logo}`}
+                                alt={company.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-3xl">🏢</span>
+                            )}
+                          </motion.div>
+                          <div>
+                            <h3 className="font-semibold text-lg text-foreground">{company.name}</h3>
+                            <p className="text-accent text-sm font-medium">{company.industry}</p>
+                          </div>
                         </div>
+
+                        {/* Updated badge colors as requested */}
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            company.is_paid
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+                              : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                          }`}
+                        >
+                          {company.is_paid ? (
+                            <>
+                              <DollarSign className="h-3.5 w-3.5 mr-1" /> Paid
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-3.5 w-3.5 mr-1" /> Unpaid
+                            </>
+                          )}
+                        </span>
                       </div>
 
                       <div className="text-muted-foreground text-sm mb-4">
@@ -403,7 +433,7 @@ const Internships = () => {
                                   id="phone"
                                   value={formData.studentPhone}
                                   onChange={(e) => setFormData({ ...formData, studentPhone: e.target.value })}
-                                  placeholder="+1 (555) 123-4567"
+                                  placeholder="+233 123 456 789"
                                 />
                               </div>
                               <div>
@@ -421,7 +451,7 @@ const Internships = () => {
                                   id="university"
                                   value={formData.university}
                                   onChange={(e) => setFormData({ ...formData, university: e.target.value })}
-                                  placeholder="University of Example"
+                                  placeholder="University of Ghana"
                                 />
                               </div>
                               <div>
@@ -495,15 +525,43 @@ const Internships = () => {
                   )}
                   {currentDescriptionCompany?.name}
                 </DialogTitle>
-                <DialogDescription className="text-base">
-                  {currentDescriptionCompany?.industry} • {currentDescriptionCompany?.location || "Remote / On-site"}
+                <DialogDescription className="text-base flex items-center gap-3">
+                  {currentDescriptionCompany?.industry} •{" "}
+                  {currentDescriptionCompany?.location || "Remote / On-site"} •{" "}
+                  <span
+                    className={
+                      currentDescriptionCompany?.is_paid
+                        ? "text-green-600 font-medium"
+                        : "text-red-600 font-medium"
+                    }
+                  >
+                    {currentDescriptionCompany?.is_paid ? "Paid Internship" : "Unpaid Internship"}
+                  </span>
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-4">
-                <h4 className="font-semibold mb-2">About this opportunity</h4>
-                <p className="text-muted-foreground leading-relaxed">
-                  {currentDescriptionCompany?.description || "No description available."}
-                </p>
+              <div className="mt-6 space-y-6">
+                <div>
+                  <h4 className="font-semibold mb-2">About this opportunity</h4>
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {currentDescriptionCompany?.description || "No description available."}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold mb-2">Requirements</h4>
+                  {currentDescriptionCompany?.requirements && currentDescriptionCompany.requirements.trim() ? (
+                    <ol className="list-decimal pl-6 space-y-1.5 text-muted-foreground">
+                      {currentDescriptionCompany.requirements
+                        .split("\n")
+                        .filter((line) => line.trim())
+                        .map((req, index) => (
+                          <li key={index}>{req.trim()}</li>
+                        ))}
+                    </ol>
+                  ) : (
+                    <p className="text-muted-foreground italic">No specific requirements listed.</p>
+                  )}
+                </div>
               </div>
             </DialogContent>
           </Dialog>

@@ -64,18 +64,15 @@ const Auth = () => {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (response) => {
-      // ── OTP FLOW HANDLING ──
       if (response.redirect) {
         toast.success(response.message || "OTP sent! Check your email.");
         navigate(response.redirect);
         return;
       }
 
-      // Normal successful login (cookie-based or token-based)
       const user = response?.user;
       const token = response?.token;
 
-      // ── DEBUG LOGS ──
       console.log("Full login response from server:", response);
       console.log("User object received:", user);
 
@@ -86,7 +83,6 @@ const Auth = () => {
         }
         window.dispatchEvent(new Event("userUpdated"));
 
-        // Debug: show exactly what user_type looks like
         console.log("Raw user_type value:", user.user_type);
         console.log("user_type type:", typeof user.user_type);
 
@@ -101,7 +97,6 @@ const Auth = () => {
           toast.success(`Welcome, Mentor ${user.name}!`);
           navigate("/mentor/dashboard", { replace: true });
         } else {
-          // Default: student / user
           toast.success(`Welcome, ${user.name}!`);
           navigate("/", { replace: true });
         }
@@ -341,7 +336,9 @@ const Auth = () => {
                         </button>
                       </div>
 
-                      {!isLogin && <PasswordStrength password={passwordValue} />}
+                      {!isLogin && (
+                        <PasswordStrength password={passwordValue} />
+                      )}
 
                       {(isLogin ? loginForm.formState.errors.password : registerForm.formState.errors.password) && (
                         <p className="text-sm text-destructive mt-1">
@@ -450,4 +447,4 @@ const Auth = () => {
   );
 };
 
-export default Auth
+export default Auth;
