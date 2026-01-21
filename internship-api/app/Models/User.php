@@ -79,4 +79,38 @@ class User extends Authenticatable
 
         return $otpCode;
     }
+
+    public function adminIndustries()
+    {
+        return $this->hasMany(AdminIndustry::class);
+    }
+
+    /**
+     * Check if this is a super admin (full access)
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->user_type === 'admin';
+    }
+
+    /**
+     * Check if this is an industry-specific admin
+     */
+    public function isIndustryAdmin(): bool
+    {
+        return $this->user_type === 'industry_admin';
+    }
+
+    /**
+     * Get array of industries this admin can see/manage
+     * Super admins return empty array = all industries
+     */
+    public function getManagedIndustries(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return [];
+        }
+
+        return $this->adminIndustries()->pluck('industry')->toArray();
+    }
 }

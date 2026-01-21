@@ -19,16 +19,17 @@ class Company extends Model
         'available_slots',
         'is_paid',
         'requirements',
+        'applications_open',           // ← ADD THIS LINE
     ];
 
     protected $casts = [
-        'total_slots'     => 'integer',
-        'available_slots' => 'integer',
-        'is_paid'         => 'boolean',
-        'requirements'    => 'string',
+        'total_slots'         => 'integer',
+        'available_slots'     => 'integer',
+        'is_paid'             => 'boolean',
+        'applications_open'   => 'boolean',   // ← Also good to cast it explicitly
+        'requirements'        => 'string',
     ];
 
-    // Optional: accessor if you want to present requirements as array
     public function getRequirementsLinesAttribute()
     {
         if (!$this->requirements) {

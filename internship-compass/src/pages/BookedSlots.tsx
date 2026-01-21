@@ -55,7 +55,7 @@ const BookedSlots = () => {
   useEffect(() => {
     const fetchBookedSlots = async () => {
       try {
-        const res = await api.get("/api/admin/bookings");
+        const res = await api.get("/api/admin/forallbookings");
         // Only show confirmed/paid bookings
         const paidBookings = res.data.filter((b: Booking) => b.status === 'paid');
         setBookings(paidBookings);
@@ -107,14 +107,15 @@ const BookedSlots = () => {
       </section>
 
       <section className="py-12">
-        <button
+        
+        <div className="container mx-auto px-4 lg:px-8">
+          <button
               onClick={() => navigate("/dashboard")}
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
             >
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
             </button>
-        <div className="container mx-auto px-4 lg:px-8">
           {bookings.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

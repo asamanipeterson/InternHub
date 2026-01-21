@@ -20,16 +20,23 @@ class BookingController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'company_id'   => 'required|exists:companies,id',
-            'student_name' => 'required|string|max:255',
-            'student_email' => 'required|email|max:255',
-            'student_phone' => 'required|string|max:20',
-            'student_id'   => 'required|string|max:50',
-            'university'   => 'required|string|max:255',
-            'cv'           => 'required|mimes:pdf|max:10000', // 10MB max
+            'company_id'     => 'required|exists:companies,id',
+            'student_name'   => 'required|string|max:255',
+            'student_email'  => 'required|email|max:255',
+            'student_phone'  => 'required|string|max:20',
+            'student_id'     => 'required|string|max:50',
+            'university'     => 'required|string|max:255',
+            'cv'             => 'required|mimes:pdf|max:10000', // 10MB max
         ]);
 
         $company = Company::findOrFail($data['company_id']);
+
+        // NEW: Block if applications are closed for this company
+        if (!$company->applications_open) {
+            return response()->json([
+                'message' => 'Applications are currently closed for this company.'
+            ], 403);
+        }
 
         if ($company->available_slots <= 0) {
             return response()->json([
@@ -58,22 +65,49 @@ class BookingController extends Controller
     }
 
     /**
-     * Get all bookings (for admin dashboard)
+     * Get all bookings grouped by industry (for admin dashboard)
      */
-    public function index()
+    public function index(Request $request)
     {
-        $bookings = Booking::with('company')->latest()->get();
+        $query = Booking::with('company')->latest();
 
-        return response()->json($bookings);
+        $bookings = $query->get();
+
+        $grouped = $bookings->groupBy(function ($booking) {
+            return $booking->company->industry ?? 'Uncategorized';
+        })->map(function ($group, $industry) {
+            return [
+                'industry' => $industry,
+                'count'    => $group->count(),
+                'pending'  => $group->where('status', 'pending')->count(),
+                'bookings' => $group->map(function ($booking) {
+                    return [
+                        'id'            => $booking->id,
+                        'company'       => [
+                            'id'   => $booking->company->id,
+                            'name' => $booking->company->name,
+                        ],
+                        'student_name'  => $booking->student_name,
+                        'student_email' => $booking->student_email,
+                        'student_phone' => $booking->student_phone,
+                        'university'    => $booking->university,
+                        'cv_path'       => $booking->cv_path,
+                        'status'        => $booking->status,
+                        'created_at'    => $booking->created_at,
+                        'expires_at'    => $booking->expires_at,
+                    ];
+                })->values(),
+            ];
+        })->values();
+
+        return response()->json($grouped);
     }
 
     /**
      * Approve a pending application → Initialize Paystack + Send email
-     * (do NOT decrement slot here anymore)
      */
     public function approve($id, Request $request)
     {
-        // Fixed fee: GHS 2.00 = 200 pesewas
         $amountInPesewas = 200;
 
         $booking = Booking::with('company')->findOrFail($id);
@@ -84,17 +118,14 @@ class BookingController extends Controller
             ], 400);
         }
 
-        // Still check slots (optimistic check)
         if ($booking->company->available_slots <= 0) {
             return response()->json([
                 'message' => 'No available slots remaining for this company.'
             ], 400);
         }
 
-        // Generate unique payment reference
         $reference = 'intern_' . Str::random(10) . '_' . $booking->id;
 
-        // Initialize Paystack transaction with Card + Mobile Money support
         $response = Http::withHeaders([
             'Authorization' => 'Bearer ' . config('services.paystack.secret_key'),
             'Content-Type'  => 'application/json',
@@ -120,22 +151,17 @@ class BookingController extends Controller
 
         $data = $response->json('data');
 
-        // Update booking to approved with 24-hour expiry
         $booking->update([
             'status'            => 'approved',
             'payment_reference' => $reference,
             'amount'            => $amountInPesewas,
             'currency'          => 'GHS',
             'expires_at'        => now()->addHours(24),
-            // 'expires_at' => now()->addSeconds(30), // ← for testing
         ]);
 
-        // Send payment link email
         Mail::to($booking->student_email)->send(new PaymentLinkMail($booking, $data['authorization_url']));
 
-        // Schedule auto-expiry job
         ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
-        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addSeconds(30)); // testing
 
         return response()->json([
             'message'     => 'Application approved. Payment link for GHS 2.00 sent to student.',
@@ -166,11 +192,70 @@ class BookingController extends Controller
             'expires_at'       => null,
         ]);
 
-        // Send rejection email
         Mail::to($booking->student_email)->send(new ApplicationRejectedMail($booking));
 
         return response()->json([
             'message' => 'Application rejected and notification sent.'
+        ]);
+    }
+
+    public function forallbookings()
+    {
+        $bookings = Booking::with('company')->latest()->get();
+
+        return response()->json($bookings);
+    }
+    public function industryAdminBookings(Request $request)
+    {
+        $user = $request->user();
+
+        // Security: only industry admins can access this
+        if (!$user->isIndustryAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $industries = $user->getManagedIndustries();
+
+        if (empty($industries)) {
+            return response()->json([
+                'bookings' => [],
+                'stats' => ['total' => 0, 'pending' => 0, 'approved' => 0]
+            ]);
+        }
+
+        $bookings = Booking::whereHas('company', function ($query) use ($industries) {
+            $query->whereIn('industry', $industries);
+        })
+            ->with(['company' => function ($q) {
+                $q->select('id', 'name'); // minimal fields needed
+            }])
+            ->latest()
+            ->get();
+
+        $stats = [
+            'total'   => $bookings->count(),
+            'pending' => $bookings->where('status', 'pending')->count(),
+            'approved' => $bookings->whereIn('status', ['approved', 'paid'])->count(),
+        ];
+
+        // Format response to match frontend expectations
+        $formattedBookings = $bookings->map(function ($booking) {
+            return [
+                'id'            => $booking->id,
+                'company'       => [
+                    'name' => $booking->company->name ?? 'N/A',
+                ],
+                'student_name'  => $booking->student_name,
+                'university'    => $booking->university,
+                'status'        => $booking->status,
+                'created_at'    => $booking->created_at->toDateString(),
+                'cv_path'       => $booking->cv_path,
+            ];
+        });
+
+        return response()->json([
+            'bookings' => $formattedBookings,
+            'stats'    => $stats,
         ]);
     }
 }

@@ -12,3 +12,8 @@ use App\Http\Controllers\MentorBookingController;
 
 Route::get('/mentor/booking/callback', [MentorBookingController::class, 'handleCallback'])
     ->name('mentor.booking.callback');
+
+
+Route::get('/set-password', function () {
+    return view('auth.set-password');
+})->middleware('signed')->name('set-password');

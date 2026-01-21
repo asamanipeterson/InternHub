@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 
 class CompanyController extends Controller
 {
@@ -62,7 +61,6 @@ class CompanyController extends Controller
         ]);
 
         if ($request->hasFile('logo')) {
-            // Delete old logo if exists
             if ($company->logo) {
                 $oldPath = str_replace('storage/', '', $company->logo);
                 if (Storage::disk('public')->exists($oldPath)) {
@@ -94,5 +92,24 @@ class CompanyController extends Controller
         $company->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Toggle applications open/closed for the specified company (admin only).
+     */
+    public function toggleApplications(Request $request, Company $company)
+    {
+        $validated = $request->validate([
+            'open' => 'required|boolean',
+        ]);
+
+        $company->update([
+            'applications_open' => $validated['open'],
+        ]);
+
+        return response()->json([
+            'message' => 'Applications ' . ($validated['open'] ? 'opened' : 'closed') . ' for ' . $company->name,
+            'open' => $company->applications_open,
+        ]);
     }
 }

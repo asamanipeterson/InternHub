@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Mail, ArrowLeft, Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { forgotPassword, resetPassword } from "@/lib/auth";
+import PasswordStrength from "@/components/PasswordStrength";
 
 const SetMentorPassword = () => {
   const navigate = useNavigate();
@@ -82,6 +83,12 @@ const SetMentorPassword = () => {
       return;
     }
 
+    // Optional: extra client-side strength check (though PasswordStrength already guides user)
+    if (formData.password.length < 8) {
+      toast.error("Password must be at least 8 characters long");
+      return;
+    }
+
     setLoading(true);
     try {
       await resetPassword({
@@ -115,7 +122,7 @@ const SetMentorPassword = () => {
         <div className="gradient-hero p-10 text-center text-primary-foreground">
           <h1 className="text-3xl font-black">Set Mentor Password</h1>
           <p className="text-lg opacity-90 mt-2">
-            {step === 1 ? "Enter your email to receive a code" : "Verify code and set your new password"}
+            {step === 1 ? "Enter your email to receive a code" : "Verify code and set a strong password"}
           </p>
         </div>
 
@@ -206,17 +213,20 @@ const SetMentorPassword = () => {
                         onChange={(e) =>
                           setFormData({ ...formData, password: e.target.value })
                         }
-                        className="pl-10 h-14 text-lg"
+                        className="pl-10 pr-12 h-14 text-lg"
                         placeholder="••••••••"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
+
+                    {/* Password Strength Meter */}
+                    <PasswordStrength password={formData.password} />
                   </div>
 
                   <div className="space-y-3">

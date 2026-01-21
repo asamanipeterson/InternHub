@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, DollarSign, XCircle } from "lucide-react";
+import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, XCircle } from "lucide-react";
 import api from "@/lib/api";
 import { Link } from "react-router-dom";
 
@@ -31,10 +31,11 @@ interface Company {
   available_slots: number;
   is_paid: boolean;
   requirements: string | null;
+  applications_open: boolean; // ← NEW: controls apply button
 }
 
 const ITEMS_PER_PAGE = 9;
-const REFRESH_INTERVAL = 10000; // 10 seconds
+const REFRESH_INTERVAL = 25000;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -241,7 +242,7 @@ const Internships = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     type="text"
-                    placeholder="Search companies or industries..."
+                    placeholder="Search companies, industries, or requirements..."
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -280,7 +281,7 @@ const Internships = () => {
                 className="text-muted-foreground mb-6"
               >
                 Showing {displayedCompanies.length} of {filteredCompanies.length}{" "}
-                {filteredCompanies.length === 1 ? "company" : "companies"} • Auto-refresh every 25s
+                {filteredCompanies.length === 1 ? "company" : "companies"}
               </motion.p>
 
               <motion.div
@@ -291,6 +292,9 @@ const Internships = () => {
               >
                 {displayedCompanies.map((company) => {
                   const hasLongDescription = company.description && company.description.length > 120;
+                  const reqLines = company.requirements
+                    ? company.requirements.split("\n").filter((line) => line.trim())
+                    : [];
 
                   return (
                     <motion.div
@@ -323,7 +327,6 @@ const Internships = () => {
                           </div>
                         </div>
 
-                        {/* Updated badge colors as requested */}
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             company.is_paid
@@ -332,9 +335,7 @@ const Internships = () => {
                           }`}
                         >
                           {company.is_paid ? (
-                            <>
-                              <DollarSign className="h-3.5 w-3.5 mr-1" /> Paid
-                            </>
+                            <>₵ Paid</>
                           ) : (
                             <>
                               <XCircle className="h-3.5 w-3.5 mr-1" /> Unpaid
@@ -358,6 +359,18 @@ const Internships = () => {
                           )}
                         </div>
                       </div>
+
+                      {!hasLongDescription && reqLines.length > 0 && (
+                        <div className="text-muted-foreground text-xs mb-4">
+                          <p className="font-medium mb-1 text-accent">Requirements:</p>
+                          <ol className="list-decimal pl-4 space-y-0.5 max-h-16 overflow-hidden">
+                            {reqLines.slice(0, 4).map((req, idx) => (
+                              <li key={idx} className="line-clamp-1">{req.trim()}</li>
+                            ))}
+                            {reqLines.length > 4 && <li className="italic">+{reqLines.length - 4} more</li>}
+                          </ol>
+                        </div>
+                      )}
 
                       <div className="flex items-center text-sm text-muted-foreground mb-4">
                         <MapPin className="h-4 w-4 mr-1" />
@@ -384,12 +397,18 @@ const Internships = () => {
                           }}
                         >
                           <DialogTrigger asChild>
-                            <Button 
-                              variant={company.available_slots > 0 ? "accent" : "secondary"}
+                            <Button
+                              variant={
+                                company.available_slots > 0 && company.applications_open
+                                  ? "accent"
+                                  : "secondary"
+                              }
                               size="sm"
-                              disabled={company.available_slots === 0}
+                              disabled={company.available_slots === 0 || !company.applications_open}
                             >
-                              {company.available_slots > 0 ? "Apply Now" : "Fully Booked"}
+                              {company.applications_open
+                                ? (company.available_slots > 0 ? "Apply Now" : "Fully Booked")
+                                : "Application Closed"}
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-md">
@@ -548,7 +567,7 @@ const Internships = () => {
                 </div>
 
                 <div>
-                  <h4 className="font-semibold mb-2">Requirements</h4>
+                  <h4 className="font-semibold mb-2 text-accent">Requirements</h4>
                   {currentDescriptionCompany?.requirements && currentDescriptionCompany.requirements.trim() ? (
                     <ol className="list-decimal pl-6 space-y-1.5 text-muted-foreground">
                       {currentDescriptionCompany.requirements

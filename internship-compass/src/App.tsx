@@ -33,7 +33,8 @@ import VerifyOtp from "./pages/VerifyOtp";
 import ForgotPassword from "./pages/ForgotPassword";
 import MentorDashboard from "./pages/MentorDashboard";
 import SetMentorPassword from "./pages/SetMentorPassword";
-
+import SetPassword from "./pages/SetPassword";
+import IndustryAdminDashboard from "./pages/IndustryAdminDashboard";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -89,6 +90,7 @@ const App = () => (
           <Route path="/verify-otp" element={<VerifyOtp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/set-mentor-password" element={<SetMentorPassword />} />
+          <Route path="/set-password" element={<SetPassword />} />
           <Route path="/auth" element={<Auth />} />
 
           {/* Protected Admin Dashboard Routes */}
@@ -105,6 +107,15 @@ const App = () => (
           <Route element={<ProtectedRoute mentorOnly={true} />}>
             <Route path="/mentor/dashboard" element={<MentorDashboard />} />
           </Route>
+
+          <Route
+  path="/industry-admin/dashboard"
+  element={
+    <ProtectedRoute industryAdminOnly={true}>
+      <IndustryAdminDashboard />
+    </ProtectedRoute>
+  }
+/>
 
           {/* Catch-all 404 */}
           <Route path="*" element={<NotFound />} />

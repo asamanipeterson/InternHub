@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -50,6 +51,9 @@ import {
   Calendar as CalendarIcon,
   Mail,
   Video,
+  Search as SearchIcon,
+  Shield,
+  Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -63,8 +67,9 @@ interface Company {
   location: string | null;
   total_slots: number;
   available_slots: number;
-  is_paid: boolean;         // ← added
-  requirements: string | null; // ← added
+  is_paid: boolean;
+  requirements: string | null;
+  applications_open: boolean;
 }
 
 interface Mentor {
@@ -109,8 +114,23 @@ interface MentorBooking {
   created_at: string;
 }
 
+interface GroupedBooking {
+  industry: string;
+  count: number;
+  pending: number;
+  bookings: Booking[];
+}
+
+interface IndustryAdmin {
+  id: string;
+  name: string;
+  email: string;
+  industries: string[];
+}
+
 const ITEMS_PER_PAGE = 10;
-const REFRESH_INTERVAL = 10000; // 10 seconds - auto refresh
+const REFRESH_INTERVAL = 25000;
+const INDUSTRIES_PER_LOAD = 6;
 
 const INDUSTRIES = [
   "Technology", "Finance", "Energy", "HealthCare", "Arts & Design", "Education", "Manufacturing",
@@ -138,14 +158,16 @@ const itemVariants = {
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // Main data states
   const [companies, setCompanies] = useState<Company[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allGroupedBookings, setAllGroupedBookings] = useState<GroupedBooking[]>([]);
+  const [visibleGroupedBookings, setVisibleGroupedBookings] = useState<GroupedBooking[]>([]);
+  const [filteredCount, setFilteredCount] = useState(0);
   const [mentorBookings, setMentorBookings] = useState<MentorBooking[]>([]);
+  const [industryAdmins, setIndustryAdmins] = useState<IndustryAdmin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
 
-  // Company dialog states
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyFile, setCompanyFile] = useState<File | null>(null);
@@ -157,11 +179,10 @@ const Dashboard = () => {
     location: "",
     total_slots: 5,
     available_slots: 5,
-    is_paid: true,           // ← added
-    requirements: "",        // ← added
+    is_paid: true,
+    requirements: "",
   });
 
-  // Mentor dialog states
   const [mentorDialogOpen, setMentorDialogOpen] = useState(false);
   const [editingMentor, setEditingMentor] = useState<Mentor | null>(null);
   const [mentorFile, setMentorFile] = useState<File | null>(null);
@@ -178,44 +199,82 @@ const Dashboard = () => {
     google_calendar_email: "",
   });
 
-  // Availability editor states
+  const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
   const [selectedMentorForAvailability, setSelectedMentorForAvailability] = useState<Mentor | null>(null);
   const [availabilityForm, setAvailabilityForm] = useState({
     selectedDays: [] as number[],
     start_time: "09:00",
     end_time: "17:00"
   });
+  const [savingAvailability, setSavingAvailability] = useState(false);
 
-  // CV Modal states
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [currentCvPath, setCurrentCvPath] = useState<string | null>(null);
   const [currentStudentName, setCurrentStudentName] = useState<string>("");
   const [currentCompanyName, setCurrentCompanyName] = useState<string>("");
 
-  const getCvUrl = (path: string) => {
-    return `${api.defaults.baseURL}/storage/${path}`;
-  };
-
+  const [industrySearch, setIndustrySearch] = useState("");
+  const [visibleIndustryCount, setVisibleIndustryCount] = useState(INDUSTRIES_PER_LOAD);
   const [visibleCompanies, setVisibleCompanies] = useState(ITEMS_PER_PAGE);
   const [visibleMentors, setVisibleMentors] = useState(ITEMS_PER_PAGE);
+
+  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [adminForm, setAdminForm] = useState({
+    email: "",
+    industries: [] as string[],
+  });
+
+  const getCvUrl = (path: string) => `${api.defaults.baseURL}/storage/${path}`;
 
   const companyFileInputRef = useRef<HTMLInputElement>(null);
   const mentorFileInputRef = useRef<HTMLInputElement>(null);
 
+  const totalSlots = companies.reduce((acc, c) => acc + (c.total_slots || 0), 0);
+  const availableSlotsTotal = companies.reduce((acc, c) => acc + (c.available_slots || 0), 0);
+  const bookedSlots = totalSlots - availableSlotsTotal;
+
+  const pendingInternshipBookings = allGroupedBookings.reduce((acc, group) => acc + (group.pending || 0), 0);
+  const bookedMentorships = mentorBookings.length;
+
+  const stats = [
+    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary", onClick: () => navigate("/companies-dashboard") },
+    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
+    { icon: CheckCircle, label: "Booked Slots", value: bookedSlots, color: "bg-blue-500", onClick: () => navigate("/booked-slots") },
+    { icon: Clock, label: "Pending Internships", value: pendingInternshipBookings, color: "bg-yellow-500", onClick: () => navigate("/pending-applications") },
+    { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
+    { icon: UserCircle, label: "Mentors", value: mentors.length, color: "bg-muted-foreground", onClick: () => navigate("/mentors-dashboard") },
+    { icon: CalendarIcon, label: "Booked Mentorships", value: bookedMentorships, color: "bg-purple-500", onClick: () => navigate("/admin/mentorship-bookings") },
+  ];
+
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await api.get("/api/user");
+        setCurrentUser(res.data);
+      } catch (err) {
+        console.error("Failed to fetch current user:", err);
+      }
+    };
+
     const fetchData = async () => {
       try {
-        const [companiesRes, mentorsRes, internshipRes, mentorBookingsRes] = await Promise.all([
+        const [companiesRes, mentorsRes, bookingsRes, mentorBookingsRes, adminsRes] = await Promise.all([
           api.get("/api/companies"),
           api.get("/api/mentors"),
           api.get("/api/admin/bookings"),
           api.get("/api/admin/mentor-bookings"),
+          api.get("/api/admin/industry-admins"),
         ]);
 
-        setCompanies(companiesRes.data);
-        setMentors(mentorsRes.data);
-        setBookings(internshipRes.data);
-        setMentorBookings(mentorBookingsRes.data);
+        setCompanies(companiesRes.data || []);
+        setMentors(mentorsRes.data || []);
+        setAllGroupedBookings(bookingsRes.data || []);
+        setMentorBookings(mentorBookingsRes.data || []);
+        setIndustryAdmins(adminsRes.data || []);
+
+        setVisibleIndustryCount(INDUSTRIES_PER_LOAD);
+        setVisibleCompanies(ITEMS_PER_PAGE);
+        setVisibleMentors(ITEMS_PER_PAGE);
       } catch (err: any) {
         toast.error("Failed to load dashboard data");
         console.error("Dashboard fetch error:", err);
@@ -223,12 +282,109 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
+
+    fetchUser();
     fetchData();
 
-    // Auto-refresh every 25 seconds
     const interval = setInterval(fetchData, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (allGroupedBookings.length === 0) {
+      setVisibleGroupedBookings([]);
+      setFilteredCount(0);
+      return;
+    }
+
+    const searchLower = industrySearch.trim().toLowerCase();
+    let filtered = allGroupedBookings;
+
+    if (searchLower) {
+      filtered = allGroupedBookings.filter(group =>
+        group.industry.toLowerCase().includes(searchLower)
+      );
+    }
+
+    setFilteredCount(filtered.length);
+    setVisibleGroupedBookings(filtered.slice(0, visibleIndustryCount));
+  }, [allGroupedBookings, industrySearch, visibleIndustryCount]);
+
+  const loadMoreIndustries = () => {
+    setVisibleIndustryCount(prev => prev + INDUSTRIES_PER_LOAD);
+  };
+
+  const refreshData = async () => {
+    try {
+      const [companiesRes, mentorsRes, bookingsRes, mentorBookingsRes, adminsRes] = await Promise.all([
+        api.get("/api/companies"),
+        api.get("/api/mentors"),
+        api.get("/api/admin/bookings"),
+        api.get("/api/admin/mentor-bookings"),
+        api.get("/api/admin/industry-admins"),
+      ]);
+
+      setCompanies(companiesRes.data || []);
+      setMentors(mentorsRes.data || []);
+      setAllGroupedBookings(bookingsRes.data || []);
+      setMentorBookings(mentorBookingsRes.data || []);
+      setIndustryAdmins(adminsRes.data || []);
+    } catch (err: any) {
+      toast.error("Failed to refresh data");
+      console.error("Refresh error:", err);
+    }
+  };
+
+  const openAvailabilityDialog = (mentor: Mentor) => {
+    setSelectedMentorForAvailability(mentor);
+    setAvailabilityForm({
+      selectedDays: [],
+      start_time: "09:00",
+      end_time: "17:00"
+    });
+    setAvailabilityDialogOpen(true);
+  };
+
+  const handleSaveAvailability = async () => {
+    if (!selectedMentorForAvailability) return;
+    if (availabilityForm.selectedDays.length === 0) {
+      toast.error("Please select at least one day");
+      return;
+    }
+
+    setSavingAvailability(true);
+
+    try {
+      const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+      const promises = availabilityForm.selectedDays.map(dayIndex =>
+        api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, {
+          day_of_week: dayNames[dayIndex - 1],
+          start_time: availabilityForm.start_time,
+          end_time: availabilityForm.end_time,
+        })
+      );
+
+      await Promise.all(promises);
+
+      toast.success(`Availability saved for ${availabilityForm.selectedDays.length} day(s)`);
+      setAvailabilityDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save availability");
+    } finally {
+      setSavingAvailability(false);
+    }
+  };
+
+  const handleToggleApplications = async (company: Company, open: boolean) => {
+    try {
+      const response = await api.post(`/api/companies/${company.id}/toggle-applications`, { open });
+      toast.success(response.data.message);
+      await refreshData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update application status");
+    }
+  };
 
   const handleCompanyImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -250,39 +406,12 @@ const Dashboard = () => {
     }
   };
 
-  const totalSlots = companies.reduce((acc, c) => acc + c.total_slots, 0);
-  const availableSlotsTotal = companies.reduce((acc, c) => acc + c.available_slots, 0);
-  const bookedSlots = totalSlots - availableSlotsTotal;
-
-  const pendingInternshipBookings = bookings.filter(b => b.status === 'pending').length;
-  const bookedMentorships = mentorBookings.length;
-
-  const refreshData = async () => {
-    try {
-      const [companiesRes, mentorsRes, internshipRes, mentorBookingsRes] = await Promise.all([
-        api.get("/api/companies"),
-        api.get("/api/mentors"),
-        api.get("/api/admin/bookings"),
-        api.get("/api/admin/mentor-bookings"),
-      ]);
-
-      setCompanies(companiesRes.data);
-      setMentors(mentorsRes.data);
-      setBookings(internshipRes.data);
-      setMentorBookings(mentorBookingsRes.data);
-
-      setVisibleCompanies(ITEMS_PER_PAGE);
-      setVisibleMentors(ITEMS_PER_PAGE);
-    } catch (err) {
-      toast.error("Failed to refresh data");
-    }
-  };
-
   const handleSaveCompany = async () => {
     if (!companyForm.name || !companyForm.industry) {
       toast.error("Please fill in required fields");
       return;
     }
+
     const formData = new FormData();
     formData.append("name", companyForm.name);
     formData.append("industry", companyForm.industry);
@@ -290,8 +419,8 @@ const Dashboard = () => {
     formData.append("location", companyForm.location || "");
     formData.append("total_slots", companyForm.total_slots.toString());
     formData.append("available_slots", companyForm.available_slots.toString());
-    formData.append("is_paid", companyForm.is_paid ? "1" : "0");           // ← added
-    formData.append("requirements", companyForm.requirements || "");       // ← added
+    formData.append("is_paid", companyForm.is_paid ? "1" : "0");
+    formData.append("requirements", companyForm.requirements || "");
     if (companyFile) formData.append("logo", companyFile);
 
     try {
@@ -304,15 +433,15 @@ const Dashboard = () => {
       }
       setCompanyDialogOpen(false);
       setEditingCompany(null);
-      setCompanyForm({ 
-        name: "", 
-        industry: "", 
-        description: "", 
-        location: "", 
-        total_slots: 5, 
+      setCompanyForm({
+        name: "",
+        industry: "",
+        description: "",
+        location: "",
+        total_slots: 5,
         available_slots: 5,
-        is_paid: true,           // ← added
-        requirements: ""         // ← added
+        is_paid: true,
+        requirements: "",
       });
       setCompanyFile(null);
       setCompanyPreview(null);
@@ -331,8 +460,8 @@ const Dashboard = () => {
       location: company.location || "",
       total_slots: company.total_slots,
       available_slots: company.available_slots,
-      is_paid: company.is_paid ?? true,           // ← added
-      requirements: company.requirements || "",   // ← added
+      is_paid: company.is_paid ?? true,
+      requirements: company.requirements || "",
     });
     setCompanyPreview(company.logo ? `/${company.logo}` : null);
     setCompanyFile(null);
@@ -439,7 +568,7 @@ const Dashboard = () => {
   };
 
   const handleApproveBooking = async (bookingId: string) => {
-    const booking = bookings.find(b => b.id === bookingId);
+    const booking = allGroupedBookings.flatMap(g => g.bookings).find(b => b.id === bookingId);
     if (!booking) return;
 
     const confirmed = confirm(
@@ -451,14 +580,14 @@ const Dashboard = () => {
     try {
       await api.post(`/api/admin/bookings/${bookingId}/approve`);
       toast.success("Application approved!");
-      refreshData();
+      await refreshData();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to approve application");
     }
   };
 
   const handleRejectBooking = async (bookingId: string) => {
-    const booking = bookings.find(b => b.id === bookingId);
+    const booking = allGroupedBookings.flatMap(g => g.bookings).find(b => b.id === bookingId);
     if (!booking) return;
 
     const reason = prompt("Please provide a reason for rejection (sent to student):", "");
@@ -471,29 +600,32 @@ const Dashboard = () => {
     try {
       await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
       toast.success("Application rejected.");
-      refreshData();
+      await refreshData();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to reject application");
     }
   };
 
-  const stats = [
-    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary", onClick: () => navigate("/companies-dashboard") },
-    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
-    { icon: CheckCircle, label: "Booked Slots", value: bookedSlots, color: "bg-blue-500", onClick: () => navigate("/booked-slots") },
-    { icon: Clock, label: "Pending Internships", value: pendingInternshipBookings, color: "bg-yellow-500", onClick: () => navigate("/pending-applications") },
-    { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
-    { icon: UserCircle, label: "Mentors", value: mentors.length, color: "bg-muted-foreground", onClick: () => navigate("/mentors-dashboard") },
-    { icon: CalendarIcon, label: "Booked Mentorships", value: bookedMentorships, color: "bg-purple-500", onClick: () => navigate("/admin/mentorship-bookings") },
-  ];
+  const handleCreateIndustryAdmin = async () => {
+    if (!adminForm.email || adminForm.industries.length === 0) {
+      toast.error("Email and at least one industry are required");
+      return;
+    }
 
-  const displayedCompanies = companies.slice(0, visibleCompanies);
-  const displayedMentors = mentors.slice(0, visibleMentors);
-  const hasMoreCompanies = visibleCompanies < companies.length;
-  const hasMoreMentors = visibleMentors < mentors.length;
-
-  const loadMoreCompanies = () => setVisibleCompanies((prev) => prev + ITEMS_PER_PAGE);
-  const loadMoreMentors = () => setVisibleMentors((prev) => prev + ITEMS_PER_PAGE);
+    try {
+      await api.post("/api/admin/industry-admins", {
+        email: adminForm.email,
+        industries: adminForm.industries,
+      });
+      toast.success("Industry admin created — set-password email sent");
+      setAdminDialogOpen(false);
+      setAdminForm({ email: "", industries: [] });
+      const adminsRes = await api.get("/api/admin/industry-admins");
+      setIndustryAdmins(adminsRes.data || []);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to create industry admin");
+    }
+  };
 
   const openCvModal = (booking: Booking) => {
     setCurrentCvPath(booking.cv_path);
@@ -504,21 +636,33 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center pt-24">
         <p className="text-lg">Loading dashboard...</p>
       </div>
     );
   }
 
+  const isSuperAdmin = currentUser?.user_type === 'admin';
+
+  const displayedCompanies = companies.slice(0, visibleCompanies);
+  const displayedMentors = mentors.slice(0, visibleMentors);
+  const hasMoreCompanies = visibleCompanies < companies.length;
+  const hasMoreMentors = visibleMentors < mentors.length;
+
+  const loadMoreCompanies = () => setVisibleCompanies(prev => prev + ITEMS_PER_PAGE);
+  const loadMoreMentors = () => setVisibleMentors(prev => prev + ITEMS_PER_PAGE);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <section className="pt-24 lg:pt-32 pb-8 gradient-hero">
+      <section className="pt-32 lg:pt-40 pb-8 gradient-hero">
         <div className="container mx-auto px-4 lg:px-8">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="text-center">
             <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-2">Admin Dashboard</h1>
-            <p className="text-primary-foreground/80">Manage companies, mentors, and internship applications</p>
+            <p className="text-primary-foreground/80">
+              Manage companies, mentors, internship applications {isSuperAdmin && "and industry admins"}
+            </p>
           </motion.div>
         </div>
       </section>
@@ -531,7 +675,7 @@ const Dashboard = () => {
                 key={stat.label}
                 variants={itemVariants}
                 whileHover={{ scale: stat.onClick ? 1.05 : 1.02 }}
-                className={`bg-card rounded-xl p-6 mt-18 shadow-elevated border border-border text-center transition-all ${stat.onClick ? "cursor-pointer hover:shadow-xl" : ""}`}
+                className={`bg-card rounded-xl p-6 shadow-elevated border border-border text-center transition-all ${stat.onClick ? "cursor-pointer hover:shadow-xl" : ""}`}
                 onClick={stat.onClick}
               >
                 <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mx-auto mb-3`}>
@@ -548,11 +692,24 @@ const Dashboard = () => {
       <section className="py-8">
         <div className="container mx-auto px-4 lg:px-8">
           <Tabs defaultValue="companies" className="space-y-6">
-            <TabsList className="grid w-full max-w-lg grid-cols-4 mx-auto">
-              <TabsTrigger value="companies" className="flex items-center gap-2"><Building className="h-4 w-4" /> Companies</TabsTrigger>
-              <TabsTrigger value="mentors" className="flex items-center gap-2"><Users className="h-4 w-4" /> Mentors</TabsTrigger>
-              <TabsTrigger value="bookings" className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Bookings</TabsTrigger>
-              <TabsTrigger value="availability" className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" /> Availability</TabsTrigger>
+            <TabsList className="grid w-full max-w-lg grid-cols-5 mx-auto">
+              <TabsTrigger value="companies" className="flex items-center gap-2">
+                Companies
+              </TabsTrigger>
+              <TabsTrigger value="mentors" className="flex items-center gap-2">
+                Mentors
+              </TabsTrigger>
+              <TabsTrigger value="bookings" className="flex items-center gap-2">
+                 Bookings
+              </TabsTrigger>
+              <TabsTrigger value="availability" className="flex items-center gap-2">
+               Availability
+              </TabsTrigger>
+              {isSuperAdmin && (
+                <TabsTrigger value="admins" className="flex items-center gap-2">
+                   Admins
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="companies" className="space-y-8">
@@ -560,20 +717,20 @@ const Dashboard = () => {
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
                 <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="accent" onClick={() => { 
-                      setEditingCompany(null); 
-                      setCompanyForm({ 
-                        name: "", 
-                        industry: "", 
-                        description: "", 
-                        location: "", 
-                        total_slots: 5, 
+                    <Button variant="accent" onClick={() => {
+                      setEditingCompany(null);
+                      setCompanyForm({
+                        name: "",
+                        industry: "",
+                        description: "",
+                        location: "",
+                        total_slots: 5,
                         available_slots: 5,
-                        is_paid: true,           // ← added default
-                        requirements: ""         // ← added default
-                      }); 
-                      setCompanyFile(null); 
-                      setCompanyPreview(null); 
+                        is_paid: true,
+                        requirements: "",
+                      });
+                      setCompanyFile(null);
+                      setCompanyPreview(null);
                     }}>
                       <Plus className="h-4 w-4 mr-2" /> Add Company
                     </Button>
@@ -587,18 +744,31 @@ const Dashboard = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 md:col-span-1">
                           <Label>Company Name *</Label>
-                          <Input placeholder="Enter name" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} />
+                          <Input
+                            placeholder="Enter name"
+                            value={companyForm.name}
+                            onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                          />
                         </div>
                         <div className="col-span-2 md:col-span-1">
                           <Label>Industry *</Label>
-                          <Select value={companyForm.industry} onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}>
-                            <SelectTrigger><SelectValue placeholder="Select industry" /></SelectTrigger>
-                            <SelectContent>{INDUSTRIES.map((ind) => (<SelectItem key={ind} value={ind}>{ind}</SelectItem>))}</SelectContent>
+                          <Select
+                            value={companyForm.industry}
+                            onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select industry" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {INDUSTRIES.map((ind) => (
+                                <SelectItem key={ind} value={ind}>
+                                  {ind}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                           </Select>
                         </div>
                       </div>
-
-                      {/* Added fields - same style as others */}
                       <div>
                         <Label>Paid Internship? *</Label>
                         <select
@@ -610,7 +780,6 @@ const Dashboard = () => {
                           <option value="no">No – Unpaid / Volunteer</option>
                         </select>
                       </div>
-
                       <div>
                         <Label>Internship Requirements</Label>
                         <Textarea
@@ -621,15 +790,27 @@ const Dashboard = () => {
                         />
                         <p className="text-xs text-muted-foreground mt-1">One per line</p>
                       </div>
-
                       <div>
                         <Label>Company Logo</Label>
                         <div className="mt-2 flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer" onClick={() => companyFileInputRef.current?.click()}>
-                            {companyPreview ? (<img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />) : (<ImageIcon className="text-muted-foreground w-6 h-6" />)}
+                          <div
+                            className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer"
+                            onClick={() => companyFileInputRef.current?.click()}
+                          >
+                            {companyPreview ? (
+                              <img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                              <ImageIcon className="text-muted-foreground w-6 h-6" />
+                            )}
                           </div>
                           <div className="flex-1">
-                            <Input type="file" accept="image/*" ref={companyFileInputRef} className="hidden" onChange={handleCompanyImageChange} />
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              ref={companyFileInputRef}
+                              className="hidden"
+                              onChange={handleCompanyImageChange}
+                            />
                             <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => companyFileInputRef.current?.click()}>
                               <Upload className="h-4 w-4 mr-2" /> Upload Logo
                             </Button>
@@ -638,20 +819,36 @@ const Dashboard = () => {
                       </div>
                       <div>
                         <Label>Location</Label>
-                        <Input placeholder="e.g. San Francisco, CA" value={companyForm.location} onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })} />
+                        <Input
+                          placeholder="e.g. San Francisco, CA"
+                          value={companyForm.location}
+                          onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
+                        />
                       </div>
                       <div>
                         <Label>Description</Label>
-                        <Textarea placeholder="Briefly describe the company..." value={companyForm.description} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} />
+                        <Textarea
+                          placeholder="Briefly describe the company..."
+                          value={companyForm.description}
+                          onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })}
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Total Slots</Label>
-                          <Input type="number" value={companyForm.total_slots} onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })} />
+                          <Input
+                            type="number"
+                            value={companyForm.total_slots}
+                            onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })}
+                          />
                         </div>
                         <div>
                           <Label>Available Slots</Label>
-                          <Input type="number" value={companyForm.available_slots} onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })} />
+                          <Input
+                            type="number"
+                            value={companyForm.available_slots}
+                            onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })}
+                          />
                         </div>
                       </div>
                       <Button variant="accent" className="w-full" onClick={handleSaveCompany}>
@@ -671,25 +868,59 @@ const Dashboard = () => {
                         <th className="text-left p-4 font-medium hidden md:table-cell">Industry</th>
                         <th className="text-left p-4 font-medium hidden md:table-cell">Location</th>
                         <th className="text-center p-4 font-medium">Slots</th>
+                        <th className="text-center p-4 font-medium">Applications Open</th>
                         <th className="text-right p-4 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {displayedCompanies.map((company, index) => (
-                        <motion.tr key={company.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="border-t border-border hover:bg-secondary/50 transition-colors">
+                        <motion.tr
+                          key={company.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border-t border-border hover:bg-secondary/50 transition-colors"
+                        >
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              {company.logo ? (<img src={`/${company.logo}`} alt={company.name} className="w-8 h-8 rounded object-cover border border-border" />) : (<div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs">Building</div>)}
+                              {company.logo ? (
+                                <img
+                                  src={`/${company.logo}`}
+                                  alt={company.name}
+                                  className="w-8 h-8 rounded object-cover border border-border"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-xs">Building</div>
+                              )}
                               <span className="font-medium">{company.name}</span>
                             </div>
                           </td>
                           <td className="p-4 text-muted-foreground hidden md:table-cell">{company.industry}</td>
                           <td className="p-4 text-muted-foreground hidden md:table-cell">{company.location || "-"}</td>
-                          <td className="p-4 text-center"><span className="text-accent font-semibold">{company.available_slots}</span>/{company.total_slots}</td>
+                          <td className="p-4 text-center">
+                            <span className="text-accent font-semibold">{company.available_slots}</span>/{company.total_slots}
+                          </td>
+                          <td className="p-4 text-center">
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={company.applications_open}
+                                onChange={(e) => handleToggleApplications(company, e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className={`w-11 h-6 rounded-full transition-colors ${company.applications_open ? 'bg-green-500' : 'bg-gray-400'}`}>
+                                <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transform transition-transform ${company.applications_open ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                              </div>
+                            </label>
+                          </td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => handleEditCompany(company)}><Pencil className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCompany(company.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEditCompany(company)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCompany(company.id)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </div>
                           </td>
                         </motion.tr>
@@ -698,22 +929,37 @@ const Dashboard = () => {
                   </table>
                 </div>
               </div>
+
               {hasMoreCompanies && (
-                <div className="text-center"><Button variant="accent" size="lg" onClick={loadMoreCompanies}>Load More Companies</Button></div>
+                <div className="text-center mt-8">
+                  <Button variant="accent" size="lg" onClick={loadMoreCompanies}>
+                    Load More Companies
+                  </Button>
+                </div>
               )}
             </TabsContent>
-
-            {/* ──────────────────────────────────────────────── */}
-            {/* The rest of your file remains EXACTLY the same */}
-            {/* Mentors tab, Bookings tab, Availability tab, dialogs, CV modal, etc. */}
-            {/* ──────────────────────────────────────────────── */}
 
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Mentors</h2>
                 <Dialog open={mentorDialogOpen} onOpenChange={setMentorDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="accent" onClick={() => { setEditingMentor(null); setMentorForm({ name: "", email: "", title: "", specialization: "", bio: "", experience: 5, rating: 4.5, session_price: 200.00, google_calendar_email: "" }); setMentorFile(null); setMentorPreview(null); }}>
+                    <Button variant="accent" onClick={() => {
+                      setEditingMentor(null);
+                      setMentorForm({
+                        name: "",
+                        email: "",
+                        title: "",
+                        specialization: "",
+                        bio: "",
+                        experience: 5,
+                        rating: 4.5,
+                        session_price: 200.00,
+                        google_calendar_email: "",
+                      });
+                      setMentorFile(null);
+                      setMentorPreview(null);
+                    }}>
                       <Plus className="h-4 w-4 mr-2" /> Add Mentor
                     </Button>
                   </DialogTrigger>
@@ -724,37 +970,120 @@ const Dashboard = () => {
                     </DialogHeader>
                     <div className="space-y-4 mt-4">
                       <div className="flex flex-col items-center mb-4">
-                        <div className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2" onClick={() => mentorFileInputRef.current?.click()}>
-                          {mentorPreview ? (<img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />) : (<User className="text-muted-foreground w-10 h-10" />)}
+                        <div
+                          className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2"
+                          onClick={() => mentorFileInputRef.current?.click()}
+                        >
+                          {mentorPreview ? (
+                            <img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <User className="text-muted-foreground w-10 h-10" />
+                          )}
                         </div>
-                        <Input type="file" accept="image/*" ref={mentorFileInputRef} className="hidden" onChange={handleMentorImageChange} />
-                        <Button type="button" variant="ghost" size="sm" onClick={() => mentorFileInputRef.current?.click()}>Change Photo</Button>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          ref={mentorFileInputRef}
+                          className="hidden"
+                          onChange={handleMentorImageChange}
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => mentorFileInputRef.current?.click()}>
+                          Change Photo
+                        </Button>
                       </div>
                       <div>
                         <Label>Email Address (login & notifications) *</Label>
                         <div className="relative mt-2">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                          <Input type="email" placeholder="mentor@example.com" value={mentorForm.email} onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })} className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary" required />
+                          <Input
+                            type="email"
+                            placeholder="mentor@example.com"
+                            value={mentorForm.email}
+                            onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })}
+                            className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                            required
+                          />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Name *</Label><Input placeholder="Full Name" value={mentorForm.name} onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })} /></div>
-                        <div><Label>Job Title *</Label><Input placeholder="e.g. Senior Developer" value={mentorForm.title} onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })} /></div>
+                        <div>
+                          <Label>Name *</Label>
+                          <Input
+                            placeholder="Full Name"
+                            value={mentorForm.name}
+                            onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Job Title *</Label>
+                          <Input
+                            placeholder="e.g. Senior Developer"
+                            value={mentorForm.title}
+                            onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })}
+                          />
+                        </div>
                       </div>
-                      <div><Label>Specialization</Label><Input placeholder="e.g. Frontend Architecture" value={mentorForm.specialization} onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })} /></div>
-                      <div><Label>Bio</Label><Textarea placeholder="Mentor's professional background..." value={mentorForm.bio} onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })} /></div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Experience (years)</Label><Input type="number" value={mentorForm.experience} onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })} /></div>
-                        <div><Label>Rating</Label><Input type="number" step="0.1" min="0" max="5" value={mentorForm.rating} onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })} /></div>
+                      <div>
+                        <Label>Specialization</Label>
+                        <Input
+                          placeholder="e.g. Frontend Architecture"
+                          value={mentorForm.specialization}
+                          onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Bio</Label>
+                        <Textarea
+                          placeholder="Mentor's professional background..."
+                          value={mentorForm.bio}
+                          onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Session Price (GHS) *</Label><Input type="number" step="0.01" value={mentorForm.session_price} onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })} placeholder="200.00" /></div>
+                        <div>
+                          <Label>Experience (years)</Label>
+                          <Input
+                            type="number"
+                            value={mentorForm.experience}
+                            onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Rating</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="5"
+                            value={mentorForm.rating}
+                            onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Session Price (GHS) *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={mentorForm.session_price}
+                            onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })}
+                            placeholder="200.00"
+                          />
+                        </div>
                         <div>
                           <Label>Google Calendar Email (for auto Meet creation)</Label>
-                          <Input type="email" placeholder="mentor@gmail.com" value={mentorForm.google_calendar_email} onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })} />
+                          <Input
+                            type="email"
+                            placeholder="mentor@gmail.com"
+                            value={mentorForm.google_calendar_email}
+                            onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
+                          />
                         </div>
                       </div>
-                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>{editingMentor ? "Update Mentor" : "Add Mentor"}</Button>
+                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
+                        {editingMentor ? "Update Mentor" : "Add Mentor"}
+                      </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -762,149 +1091,512 @@ const Dashboard = () => {
 
               <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {displayedMentors.map((mentor) => (
-                  <motion.div key={mentor.id} variants={itemVariants} whileHover={{ y: -4 }} className="bg-card rounded-xl p-6 shadow-soft border border-border">
+                  <motion.div
+                    key={mentor.id}
+                    variants={itemVariants}
+                    whileHover={{ y: -4 }}
+                    className="bg-card rounded-xl p-6 shadow-soft border border-border"
+                  >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        {mentor.image ? (<img src={`/${mentor.image}`} alt={mentor.name} className="w-12 h-12 rounded-full object-cover border border-border" />) : (<div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>)}
-                        <div><h3 className="font-semibold">{mentor.name}</h3><p className="text-sm text-accent">{mentor.title}</p></div>
+                        {mentor.image ? (
+                          <img
+                            src={`/${mentor.image}`}
+                            alt={mentor.name}
+                            className="w-12 h-12 rounded-full object-cover border border-border"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>
+                        )}
+                        <div>
+                          <h3 className="font-semibold">{mentor.name}</h3>
+                          <p className="text-sm text-accent">{mentor.title}</p>
+                        </div>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-2">{mentor.specialization || "General"}</p>
-                    <p className="text-xs text-muted-foreground">{mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}
+                    </p>
                   </motion.div>
                 ))}
               </motion.div>
+
               {hasMoreMentors && (
-                <div className="text-center"><Button variant="accent" size="lg" onClick={loadMoreMentors}>Load More Mentors</Button></div>
+                <div className="text-center">
+                  <Button variant="accent" size="lg" onClick={loadMoreMentors}>
+                    Load More Mentors
+                  </Button>
+                </div>
               )}
             </TabsContent>
 
             <TabsContent value="bookings" className="space-y-8">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between"><h2 className="text-2xl font-bold">Internship Applications</h2></motion.div>
-              <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-secondary">
-                      <tr>
-                        <th className="text-left p-4 font-medium">Student</th>
-                        <th className="text-left p-4 font-medium">Company</th>
-                        <th className="text-left p-4 font-medium hidden md:table-cell">Email</th>
-                        <th className="text-left p-4 font-medium hidden lg:table-cell">Applied</th>
-                        <th className="text-center p-4 font-medium">Status</th>
-                        <th className="text-center p-4 font-medium">CV</th>
-                        <th className="text-right p-4 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bookings.map((booking, index) => (
-                        <motion.tr key={booking.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className="border-t border-border hover:bg-secondary/50 transition-colors">
-                          <td className="p-4"><div><span className="font-medium">{booking.student_name}</span><p className="text-sm text-muted-foreground">{booking.university}</p></div></td>
-                          <td className="p-4">{booking.company.name}</td>
-                          <td className="p-4 hidden md:table-cell">{booking.student_email}</td>
-                          <td className="p-4 hidden lg:table-cell">{new Date(booking.created_at).toLocaleDateString()}</td>
-                          <td className="p-4 text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : booking.status === 'approved' ? 'bg-blue-100 text-blue-800' : booking.status === 'paid' ? 'bg-green-100 text-green-800' : booking.status === 'expired' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>{booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}</span>
-                          </td>
-                          <td className="p-4 text-center"><Button variant="ghost" size="sm" onClick={() => openCvModal(booking)}><FileText className="h-4 w-4 mr-2" /> View CV</Button></td>
-                          <td className="p-4 text-right">
-                            {booking.status === 'pending' && (
-                              <div className="flex items-center justify-end gap-2">
-                                <Button variant="accent" size="sm" onClick={() => handleApproveBooking(booking.id)}><CheckCircle className="h-4 w-4 mr-2" /> Approve</Button>
-                                <Button variant="destructive" size="sm" onClick={() => handleRejectBooking(booking.id)}><XCircle className="h-4 w-4 mr-2" /> Reject</Button>
-                              </div>
-                            )}
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h2 className="text-2xl font-bold">Internship Applications by Industry</h2>
+
+                <div className="relative w-full md:w-80">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search industries..."
+                    value={industrySearch}
+                    onChange={(e) => {
+                      setIndustrySearch(e.target.value);
+                      setVisibleIndustryCount(INDUSTRIES_PER_LOAD);
+                    }}
+                    className="pl-10"
+                  />
                 </div>
-              </div>
-              {bookings.length === 0 && (
-                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16"><BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" /><h3 className="text-xl font-semibold mb-2">No applications yet</h3><p className="text-muted-foreground">Applications will appear here when students apply</p></motion.div>
+              </motion.div>
+
+              {visibleGroupedBookings.length === 0 ? (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16">
+                  <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">
+                    {industrySearch ? "No matching industries" : "No applications yet"}
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {industrySearch ? "Try a different search term" : "Applications will appear here when students apply"}
+                  </p>
+                </motion.div>
+              ) : (
+                <>
+                  {visibleGroupedBookings.map((group) => (
+                    <div key={group.industry} className="mb-12">
+                      <div className="flex items-center justify-between mb-4 bg-secondary/50 p-4 rounded-lg">
+                        <h3 className="text-xl font-semibold">{group.industry}</h3>
+                        <div className="text-sm text-muted-foreground">
+                          <span className="font-medium text-foreground">{group.count}</span> total •
+                          <span className="ml-1 text-yellow-600 font-medium">{group.pending}</span> pending
+                        </div>
+                      </div>
+
+                      <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-max">
+                            <thead className="bg-muted/50">
+                              <tr>
+                                <th className="text-left p-4 font-medium">Student</th>
+                                <th className="text-left p-4 font-medium">Company</th>
+                                <th className="text-left p-4 font-medium hidden md:table-cell">Email</th>
+                                <th className="text-left p-4 font-medium hidden lg:table-cell">Applied</th>
+                                <th className="text-center p-4 font-medium">Status</th>
+                                <th className="text-center p-4 font-medium">CV</th>
+                                <th className="text-right p-4 font-medium">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.bookings.map((booking, idx) => (
+                                <motion.tr
+                                  key={booking.id}
+                                  initial={{ opacity: 0, x: -20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: idx * 0.03 }}
+                                  className="border-t border-border hover:bg-muted/30 transition-colors"
+                                >
+                                  <td className="p-4">
+                                    <div>
+                                      <span className="font-medium">{booking.student_name}</span>
+                                      <p className="text-sm text-muted-foreground">{booking.university}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">{booking.company.name}</td>
+                                  <td className="p-4 hidden md:table-cell">{booking.student_email}</td>
+                                  <td className="p-4 hidden lg:table-cell">
+                                    {new Date(booking.created_at).toLocaleDateString()}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <span
+                                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                        booking.status === 'approved' ? 'bg-blue-100 text-blue-800' :
+                                        booking.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                        booking.status === 'expired' ? 'bg-gray-100 text-gray-800' :
+                                        'bg-red-100 text-red-800'
+                                      }`}
+                                    >
+                                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <Button variant="ghost" size="sm" onClick={() => openCvModal(booking)}>
+                                      <FileText className="h-4 w-4 mr-2" /> View CV
+                                    </Button>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    {booking.status === 'pending' && (
+                                      <div className="flex items-center justify-end gap-2">
+                                        <Button variant="default" size="sm" onClick={() => handleApproveBooking(booking.id)}>
+                                          <CheckCircle className="h-4 w-4 mr-2" /> Approve
+                                        </Button>
+                                        <Button variant="destructive" size="sm" onClick={() => handleRejectBooking(booking.id)}>
+                                          <XCircle className="h-4 w-4 mr-2" /> Reject
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </motion.tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {visibleIndustryCount < filteredCount && (
+                    <div className="text-center mt-12">
+                      <Button variant="accent" size="lg" onClick={loadMoreIndustries} className="px-10">
+                        Load More Bookings
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </TabsContent>
 
             <TabsContent value="availability" className="space-y-8">
               <div>
-                <h2 className="text-2xl font-bold mb-6">Mentor Weekly Availability</h2>
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {mentors.map(mentor => (
-                    <div key={mentor.id} className="bg-card p-6 rounded-xl border border-border">
-                      <div className="flex justify-between items-start mb-4">
-                        <div><h3 className="font-semibold text-lg">{mentor.name}</h3><p className="text-sm text-muted-foreground">{mentor.title}</p></div>
-                        <Button size="sm" onClick={() => { setSelectedMentorForAvailability(mentor); setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" }); }}>Set Schedule</Button>
-                      </div>
-                      <p className="text-sm text-muted-foreground">Configure recurring weekly slots</p>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold">Mentor Weekly Availability</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Set recurring availability slots for mentors
+                  </p>
                 </div>
+
+                {mentors.length === 0 ? (
+                  <div className="text-center py-16 bg-muted/30 rounded-xl border border-border">
+                    <CalendarIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">No mentors yet</h3>
+                    <p className="text-muted-foreground">
+                      Add mentors first to set their availability
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {mentors.map((mentor) => (
+                      <motion.div
+                        key={mentor.uuid}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-card p-6 rounded-xl border border-border shadow-soft hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-3">
+                            {mentor.image ? (
+                              <img
+                                src={`/${mentor.image}`}
+                                alt={mentor.name}
+                                className="w-12 h-12 rounded-full object-cover border"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
+                                <User className="h-6 w-6 text-accent" />
+                              </div>
+                            )}
+                            <div>
+                              <h3 className="font-semibold">{mentor.name}</h3>
+                              <p className="text-sm text-muted-foreground">{mentor.title}</p>
+                            </div>
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAvailabilityDialog(mentor)}
+                          >
+                            <CalendarIcon className="h-4 w-4 mr-2" />
+                            Set Schedule
+                          </Button>
+                        </div>
+
+                        <div className="text-sm text-muted-foreground mt-2">
+                          No schedule configured yet
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
+
+            {isSuperAdmin && (
+              <TabsContent value="admins" className="space-y-8">
+                <motion.div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Manage Industry Admins</h2>
+                  <Button variant="accent" onClick={() => setAdminDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" /> Create Industry Admin
+                  </Button>
+                </motion.div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {industryAdmins.length === 0 ? (
+                    <div className="col-span-full text-center py-12 bg-muted/30 rounded-xl border border-border">
+                      <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">No industry admins yet</h3>
+                      <p className="text-muted-foreground">
+                        Create one using the button above.
+                      </p>
+                    </div>
+                  ) : (
+                    industryAdmins.map((admin) => (
+                      <div key={admin.id} className="bg-card rounded-xl p-6 border border-border shadow-soft">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="font-semibold text-lg">{admin.name || admin.email.split('@')[0]}</h3>
+                            <p className="text-sm text-muted-foreground">{admin.email}</p>
+                          </div>
+                          <Shield className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {admin.industries.length === 0 ? (
+                            <span className="text-sm text-muted-foreground italic">No industries assigned</span>
+                          ) : (
+                            admin.industries.map((ind) => (
+                              <Badge key={ind} variant="outline" className="bg-secondary">
+                                {ind}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Create Industry Admin</DialogTitle>
+                      <DialogDescription>
+                        Enter the admin's email and assign industries. A set-password email will be sent.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-6 py-4">
+                      <div>
+                        <Label>Email Address *</Label>
+                        <Input
+                          type="email"
+                          placeholder="admin@example.com"
+                          value={adminForm.email}
+                          onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Assign Industries *</Label>
+                        <Select
+                          onValueChange={(val) => {
+                            if (!adminForm.industries.includes(val)) {
+                              setAdminForm(prev => ({
+                                ...prev,
+                                industries: [...prev.industries, val]
+                              }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select one or more industries" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INDUSTRIES.filter(ind => !adminForm.industries.includes(ind)).map(ind => (
+                              <SelectItem key={ind} value={ind}>
+                                {ind}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {adminForm.industries.map(ind => (
+                            <div
+                              key={ind}
+                              className="bg-secondary px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                            >
+                              {ind}
+                              <button
+                                onClick={() => setAdminForm(prev => ({
+                                  ...prev,
+                                  industries: prev.industries.filter(i => i !== ind)
+                                }))}
+                                className="text-red-500 hover:text-red-700 text-lg leading-none"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={handleCreateIndustryAdmin}
+                        disabled={!adminForm.email || adminForm.industries.length === 0}
+                      >
+                        Create & Send Set-Password Email
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </section>
 
-      {/* Availability Editor Dialog */}
-      <Dialog open={!!selectedMentorForAvailability} onOpenChange={() => setSelectedMentorForAvailability(null)}>
+      <Dialog open={availabilityDialogOpen} onOpenChange={setAvailabilityDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Set Weekly Availability - {selectedMentorForAvailability?.name}</DialogTitle><DialogDescription>Define recurring time slots. You can apply the same hours to multiple days.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              Set Availability – {selectedMentorForAvailability?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Define recurring weekly availability slots for this mentor.
+            </DialogDescription>
+          </DialogHeader>
+
           <div className="space-y-6 py-4">
             <div>
-              <Label>Select Days</Label>
-              <div className="grid grid-cols-7 gap-2 mt-3">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
-                  <Button key={day} variant={availabilityForm.selectedDays.includes(index + 1) ? "default" : "outline"} size="sm" className="w-full" onClick={() => {
-                    const days = availabilityForm.selectedDays;
-                    if (days.includes(index + 1)) { setAvailabilityForm({ ...availabilityForm, selectedDays: days.filter(d => d !== index + 1) }); } else { setAvailabilityForm({ ...availabilityForm, selectedDays: [...days, index + 1] }); }
-                  }}>{day}</Button>
-                ))}
+              <Label className="mb-3 block">Select Days</Label>
+              <div className="grid grid-cols-7 gap-2">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
+                  const dayNum = idx + 1;
+                  const isSelected = availabilityForm.selectedDays.includes(dayNum);
+                  return (
+                    <Button
+                      key={day}
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      className="text-xs sm:text-sm"
+                      onClick={() => {
+                        setAvailabilityForm(prev => ({
+                          ...prev,
+                          selectedDays: isSelected
+                            ? prev.selectedDays.filter(d => d !== dayNum)
+                            : [...prev.selectedDays, dayNum]
+                        }));
+                      }}
+                    >
+                      {day}
+                    </Button>
+                  );
+                })}
               </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5] })}>Weekdays (Mon–Fri)</Button>
-                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [6,7] })}>Weekend</Button>
-                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [1,2,3,4,5,6,7] })}>All Week</Button>
-                <Button size="sm" variant="outline" onClick={() => setAvailabilityForm({ ...availabilityForm, selectedDays: [] })}>Clear</Button>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAvailabilityForm(prev => ({ ...prev, selectedDays: [1,2,3,4,5] }))}
+                >
+                  Weekdays
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAvailabilityForm(prev => ({ ...prev, selectedDays: [6,7] }))}
+                >
+                  Weekend
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAvailabilityForm(prev => ({ ...prev, selectedDays: [1,2,3,4,5,6,7] }))}
+                >
+                  All Week
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAvailabilityForm(prev => ({ ...prev, selectedDays: [] }))}
+                >
+                  Clear
+                </Button>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Start Time</Label><Input type="time" value={availabilityForm.start_time} onChange={e => setAvailabilityForm({...availabilityForm, start_time: e.target.value})} /></div>
-              <div><Label>End Time</Label><Input type="time" value={availabilityForm.end_time} onChange={e => setAvailabilityForm({...availabilityForm, end_time: e.target.value})} /></div>
+              <div>
+                <Label>Start Time</Label>
+                <Input
+                  type="time"
+                  value={availabilityForm.start_time}
+                  onChange={e => setAvailabilityForm(prev => ({ ...prev, start_time: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>End Time</Label>
+                <Input
+                  type="time"
+                  value={availabilityForm.end_time}
+                  onChange={e => setAvailabilityForm(prev => ({ ...prev, end_time: e.target.value }))}
+                />
+              </div>
             </div>
-            <Button className="w-full" disabled={availabilityForm.selectedDays.length === 0} onClick={async () => {
-              if (!selectedMentorForAvailability || availabilityForm.selectedDays.length === 0) return;
-              try {
-                const dayNames = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-                const requests = availabilityForm.selectedDays.map(dayIndex => {
-                  return api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, { day_of_week: dayNames[dayIndex - 1], start_time: availabilityForm.start_time, end_time: availabilityForm.end_time });
-                });
-                await Promise.all(requests);
-                toast.success(`Availability set for ${availabilityForm.selectedDays.length} day(s)`);
-                setAvailabilityForm({ selectedDays: [], start_time: "09:00", end_time: "17:00" });
-              } catch (err) { toast.error("Failed to save availability"); }
-            }}>Apply to Selected Days</Button>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setAvailabilityDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveAvailability}
+                disabled={savingAvailability || availabilityForm.selectedDays.length === 0}
+              >
+                {savingAvailability ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Availability"
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* CV Viewer Modal */}
       <Dialog open={cvModalOpen} onOpenChange={setCvModalOpen}>
-        <DialogContent className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col" aria-describedby={undefined}>
+        <DialogContent className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col">
           <DialogHeader className="p-6 pb-3 flex flex-row items-center justify-between border-b bg-card">
-            <div><DialogTitle className="text-xl">CV - {currentStudentName}</DialogTitle><DialogDescription className="text-sm text-muted-foreground">Application for {currentCompanyName}</DialogDescription></div>
-            {currentCvPath && (<Button variant="outline" size="sm" asChild><a href={getCvUrl(currentCvPath)} download target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4 mr-2" /> Download PDF</a></Button>)}
+            <div>
+              <DialogTitle className="text-xl">CV - {currentStudentName}</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">Application for {currentCompanyName}</DialogDescription>
+            </div>
+            {currentCvPath && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={getCvUrl(currentCvPath)} download target="_blank" rel="noopener noreferrer">
+                  <Download className="h-4 w-4 mr-2" /> Download PDF
+                </a>
+              </Button>
+            )}
           </DialogHeader>
-          <div className="flex-1 overflow-hidden bg-gray-50">{currentCvPath ? (<iframe src={getCvUrl(currentCvPath)} className="w-full h-full" title="CV Viewer" />) : (<div className="flex flex-col items-center justify-center h-full text-muted-foreground"><FileText className="w-16 h-16 mb-4 opacity-50" /><p>No CV uploaded</p></div>)}</div>
+          <div className="flex-1 overflow-hidden bg-gray-50">
+            {currentCvPath ? (
+              <iframe src={getCvUrl(currentCvPath)} className="w-full h-full" title="CV Viewer" />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <FileText className="w-16 h-16 mb-4 opacity-50" />
+                <p>No CV uploaded</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
       <Footer />
     </div>
-  ); 
+  );
 };
 
 export default Dashboard;

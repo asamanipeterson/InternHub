@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\OtpMail;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class AuthController extends Controller
 {
@@ -282,5 +283,54 @@ class AuthController extends Controller
         $otpRecord->delete();
 
         return response()->json(['message' => 'Password has been updated.']);
+    }
+
+
+    public function verifySetPasswordOtp(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'otp' => 'required|digits:6',
+        ]);
+
+        // Check the database instead of Cache
+        $otpRecord = OneTimePassCode::where('user_id', $request->user_id)
+            ->where('code', $request->otp)
+            ->where('expires_at', '>', Carbon::now())
+            ->first();
+
+        if (!$otpRecord) {
+            return response()->json(['message' => 'Invalid or expired code'], 422);
+        }
+
+        return response()->json(['valid' => true]);
+    }
+
+    public function setPasswordAndLogin(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        $user = User::findOrFail($request->user_id);
+
+        // Check if password is already set (prevent reset abuse)
+        if ($user->password) {
+            return response()->json(['message' => 'Password already set'], 403);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password),
+        ]);
+
+        // Login the user
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Password set successfully',
+            'user' => $user,
+            'token' => $token,
+        ]);
     }
 }
