@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,9 @@ import {
   MessageCircle,
   User,
   LogIn,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -25,9 +28,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +40,6 @@ import { useNavigate } from "react-router-dom";
 interface Mentor {
   id: string;
   uuid: string;
-  name: string;
   title: string;
   specialization: string | null;
   bio: string | null;
@@ -43,6 +47,12 @@ interface Mentor {
   experience: number;
   rating: number | string;
   session_price: number | string;
+  user: {
+    first_name: string | null;
+    middle_name: string | null;
+    last_name: string | null;
+    email: string;
+  };
 }
 
 const containerVariants = {
@@ -115,26 +125,42 @@ const Mentorship = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
 
-  // Booking Dialog State
-  const [open, setOpen] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [itemsToShow, setItemsToShow] = useState(3);
+
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bioOpen, setBioOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
+  const [selectedBioMentor, setSelectedBioMentor] = useState<Mentor | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
-    student_name: "",
+    first_name: "",
+    last_name: "",
     student_email: "",
-    student_phone: "",
-    student_age: "",
-    student_university: "",
+    phone: "",
+    date_of_birth: "",
+    student_institution: "",
     student_course: "",
     student_level: "",
+    topic_description: "",
     scheduled_at: ""
   });
 
   const navigate = useNavigate();
 
-  // Handle Redirect Status (Success/Failure)
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setItemsToShow(1);
+      else if (window.innerWidth < 1024) setItemsToShow(2);
+      else setItemsToShow(3);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("booking");
@@ -145,11 +171,7 @@ const Mentorship = () => {
         description: "Your Google Meet link has been generated and emailed to you.",
         duration: 10000,
       });
-
-      if (meetLink) {
-        console.log("Session Link:", meetLink);
-      }
-
+      if (meetLink) console.log("Session Link:", meetLink);
       navigate("/mentorship", { replace: true });
     } else if (status === "failed") {
       toast.error("Payment failed", {
@@ -180,32 +202,54 @@ const Mentorship = () => {
     fetchMentors();
   }, []);
 
+  const nextSlide = () => {
+    if (currentIndex < mentors.length - itemsToShow) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  const prevSlide = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  };
+
   const openBookingDialog = (mentor: Mentor) => {
     setSelectedMentor(mentor);
     setSelectedDate("");
     setAvailableTimes([]);
     setFormData({
-      student_name: "",
+      first_name: "",
+      last_name: "",
       student_email: "",
-      student_phone: "",
-      student_age: "",
-      student_university: "",
+      phone: "",
+      date_of_birth: "",
+      student_institution: "",
       student_course: "",
       student_level: "",
+      topic_description: "",
       scheduled_at: ""
     });
-    setOpen(true);
+    setBookingOpen(true);
+  };
+
+  const openBioDialog = (mentor: Mentor) => {
+    setSelectedBioMentor(mentor);
+    setBioOpen(true);
   };
 
   const handleSubmitBooking = async () => {
     if (!selectedMentor) return;
 
-    if (!formData.student_name ||
-        !formData.student_email ||
-        !formData.student_age ||
-        !formData.student_university ||
-        !formData.student_course ||
-        !formData.student_level ||
+    if (!formData.first_name.trim() ||
+        !formData.last_name.trim() ||
+        !formData.student_email.trim() ||
+        !formData.phone.trim() ||
+        !formData.date_of_birth ||
+        !formData.student_institution.trim() ||
+        !formData.student_course.trim() ||
+        !formData.student_level.trim() ||
+        !formData.topic_description.trim() ||
         !formData.scheduled_at) {
       toast.error("Please fill in all required fields");
       return;
@@ -215,13 +259,15 @@ const Mentorship = () => {
     try {
       const response = await api.post("/api/mentor/book/initiate", {
         mentor_id: selectedMentor.id,
-        student_name: formData.student_name,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         student_email: formData.student_email,
-        student_phone: formData.student_phone || null,
-        student_age: formData.student_age,
-        student_university: formData.student_university,
+        phone: formData.phone,
+        date_of_birth: formData.date_of_birth,
+        student_institution: formData.student_institution,
         student_course: formData.student_course,
         student_level: formData.student_level,
+        topic_description: formData.topic_description,
         scheduled_at: formData.scheduled_at
       });
 
@@ -240,11 +286,19 @@ const Mentorship = () => {
     navigate(`/mentorship/mentor/${mentor.uuid}`);
   };
 
+  const getFullName = (mentor: Mentor) => {
+    const parts = [
+      mentor.user?.first_name || "",
+      mentor.user?.middle_name || "",
+      mentor.user?.last_name || ""
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(" ") : "Mentor Name";
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Hero Section */}
       <section className="pt-32 pb-20 gradient-hero relative overflow-hidden">
         <motion.div
           className="absolute top-10 right-[5%] w-96 h-96 rounded-full bg-accent/10 blur-3xl"
@@ -392,113 +446,166 @@ const Mentorship = () => {
                 </p>
               </motion.div>
 
-              <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
-              >
-                {loading ? (
-                  Array(6).fill(null).map((_, i) => <MentorSkeleton key={i} />)
-                ) : mentors.length > 0 ? (
-                  mentors.map((mentor) => (
-                    <motion.div
-                      key={mentor.id}
-                      variants={itemVariants}
-                      whileHover={{ y: -10, scale: 1.02 }}
-                      className="group"
-                    >
-                      <div
-                        className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
-                        onClick={() => goToProfile(mentor)}
-                      >
-                        <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
-                            initial={{ x: "-100%" }}
-                            whileHover={{ x: "100%" }}
-                            transition={{ duration: 0.8 }}
-                          />
-                          {mentor.image ? (
-                            <img
-                              src={`/${mentor.image}`}
-                              alt={mentor.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <motion.span
-                              className="text-8xl relative z-10"
-                              whileHover={{
-                                scale: 1.2,
-                                rotate: [0, -15, 15, -15, 15, 0],
-                                transition: { duration: 0.6, type: "spring", stiffness: 300 },
-                              }}
-                            >
-                              👤
-                            </motion.span>
-                          )}
-                          <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                            <Star className="w-4 h-4 text-accent fill-accent" />
-                            <span className="text-sm font-bold text-foreground">
-                              {Number(mentor.rating).toFixed(1)}
-                            </span>
-                          </div>
+              <div className="relative group max-w-6xl mx-auto">
+                <div className="absolute top-1/2 -translate-y-1/2 -left-4 md:-left-12 z-30">
+                  <AnimatePresence>
+                    {currentIndex > 0 && (
+                      <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
+                        <Button variant="accent" size="icon" className="rounded-full h-12 w-12 shadow-xl" onClick={prevSlide}>
+                          <ChevronLeft className="w-8 h-8" />
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="absolute top-1/2 -translate-y-1/2 -right-4 md:-right-12 z-30">
+                  <AnimatePresence>
+                    {mentors.length > itemsToShow && currentIndex < mentors.length - itemsToShow && (
+                      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
+                        <Button variant="accent" size="icon" className="rounded-full h-12 w-12 shadow-xl" onClick={nextSlide}>
+                          <ChevronRight className="w-8 h-8" />
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="overflow-hidden">
+                  <motion.div
+                    className="flex"
+                    animate={{ x: `-${currentIndex * (100 / itemsToShow)}%` }}
+                    transition={{ type: "spring", stiffness: 260, damping: 26 }}
+                  >
+                    {loading ? (
+                      Array(6).fill(null).map((_, i) => (
+                        <div key={i} className="min-w-full md:min-w-[50%] lg:min-w-[33.333%] p-4">
+                          <MentorSkeleton />
                         </div>
+                      ))
+                    ) : mentors.length > 0 ? (
+                      mentors.map((mentor) => {
+                        const fullName = getFullName(mentor);
+                        const bioText = mentor.bio || "Dedicated mentor committed to your career success.";
+                        const isLongBio = bioText.length > 30;
+                        const truncatedBio = isLongBio ? bioText.substring(0, 30) + "..." : bioText;
 
-                        <div className="p-6">
-                          <div className="mb-4">
-                            <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-1">
-                              {mentor.name}
-                            </h3>
-                            <p className="text-accent font-semibold">{mentor.title}</p>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
-                            <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
-                              <Award className="w-3.5 h-3.5 text-primary" />
-                              {mentor.specialization || "General"}
-                            </span>
-                            <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
-                              <Clock className="w-3.5 h-3.5 text-primary" />
-                              {mentor.experience}+ yrs
-                            </span>
-                          </div>
-
-                          <p className="text-muted-foreground text-sm mb-6 line-clamp-2">
-                            {mentor.bio || "Dedicated mentor committed to your career success."}
-                          </p>
-
-                          <div className="mb-4 text-center">
-                            <p className="text-sm text-muted-foreground">Session Fee</p>
-                            <p className="text-3xl font-bold text-accent">
-                              GHS {(Number(mentor.session_price) || 0).toFixed(2)}
-                            </p>
-                          </div>
-
-                          <div className="flex gap-3">
-                            <Button
-                              variant="accent"
-                              size="default"
-                              className="flex-1 rounded-xl"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openBookingDialog(mentor);
-                              }}
+                        return (
+                          <div key={mentor.id} className="min-w-full md:min-w-[50%] lg:min-w-[33.333%] p-4">
+                            <motion.div
+                              variants={itemVariants}
+                              whileHover={{ y: -10, scale: 1.02 }}
+                              className="group"
                             >
-                              <Calendar className="w-4 h-4 mr-2" />
-                              Book Session
-                            </Button>
-                            <Button variant="outline" size="icon" className="rounded-xl">
-                              <MessageCircle className="w-4 h-4" />
-                            </Button>
+                              <div
+                                className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
+                                onClick={() => goToProfile(mentor)}
+                              >
+                                <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
+                                  <motion.div
+                                    className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
+                                    initial={{ x: "-100%" }}
+                                    whileHover={{ x: "100%" }}
+                                    transition={{ duration: 0.8 }}
+                                  />
+                                  {mentor.image ? (
+                                    <img
+                                      src={`/${mentor.image}`}
+                                      alt={fullName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <motion.span
+                                      className="text-8xl relative z-10"
+                                      whileHover={{
+                                        scale: 1.2,
+                                        rotate: [0, -15, 15, -15, 15, 0],
+                                        transition: { duration: 0.6, type: "spring", stiffness: 300 },
+                                      }}
+                                    >
+                                      👤
+                                    </motion.span>
+                                  )}
+                                  <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                                    <Star className="w-4 h-4 text-accent fill-accent" />
+                                    <span className="text-sm font-bold text-foreground">
+                                      {Number(mentor.rating).toFixed(1)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="p-6">
+                                  <div className="mb-4">
+                                    <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-1">
+                                      {fullName}
+                                    </h3>
+                                    <p className="text-accent font-semibold">{mentor.title}</p>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
+                                    <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                                      <Award className="w-3.5 h-3.5 text-primary" />
+                                      {mentor.specialization || "General"}
+                                    </span>
+                                    <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                                      <Clock className="w-3.5 h-3.5 text-primary" />
+                                      {mentor.experience}+ yrs
+                                    </span>
+                                  </div>
+
+                                  <div className="mb-6">
+                                    <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 min-h-[3rem]">
+                                      {truncatedBio}
+                                    </p>
+                                    {isLongBio && (
+                                      <Button
+                                        variant="link"
+                                        size="sm"
+                                        className="text-accent hover:text-accent/80 p-0 mt-1 h-auto font-medium"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openBioDialog(mentor);
+                                        }}
+                                      >
+                                        Read More
+                                      </Button>
+                                    )}
+                                  </div>
+
+                                  <div className="mb-4 text-center">
+                                    <p className="text-sm text-muted-foreground">Session Fee</p>
+                                    <p className="text-3xl font-bold text-accent">
+                                      GHS {(Number(mentor.session_price) || 0).toFixed(2)}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex gap-3">
+                                    <Button
+                                      variant="accent"
+                                      size="default"
+                                      className="flex-1 rounded-xl"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openBookingDialog(mentor);
+                                      }}
+                                    >
+                                      <Calendar className="w-4 h-4 mr-2" />
+                                      Book Session
+                                    </Button>
+                                    <Button variant="outline" size="icon" className="rounded-xl">
+                                      <MessageCircle className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
                           </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                ) : null}
-              </motion.div>
+                        );
+                      })
+                    ) : null}
+                  </motion.div>
+                </div>
+              </div>
 
               {!loading && mentors.length === 0 && (
                 <motion.div
@@ -516,7 +623,6 @@ const Mentorship = () => {
             </div>
           </section>
 
-          {/* Services Section */}
           <section className="py-20 bg-secondary/30">
             <div className="container mx-auto px-4 lg:px-8">
               <motion.div
@@ -577,7 +683,6 @@ const Mentorship = () => {
             </div>
           </section>
 
-          {/* CTA Section */}
           <section className="py-20 gradient-hero relative overflow-hidden">
             <motion.div
               className="absolute top-10 left-[10%] w-64 h-64 rounded-full bg-accent/10 blur-3xl"
@@ -608,25 +713,35 @@ const Mentorship = () => {
         </>
       )}
 
-      {/* Booking Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <Dialog open={bookingOpen} onOpenChange={setBookingOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Book Session with {selectedMentor?.name}</DialogTitle>
+            <DialogTitle>Book Session with {selectedMentor ? getFullName(selectedMentor) : "Mentor"}</DialogTitle>
             <DialogDescription>
               Session fee: <strong>GHS {(Number(selectedMentor?.session_price) || 0).toFixed(2)}</strong>
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={formData.student_name}
-                onChange={(e) => setFormData({ ...formData, student_name: e.target.value })}
-                placeholder="John Doe"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="first_name">First Name *</Label>
+                <Input
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="John"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="last_name">Last Name (Surname) *</Label>
+                <Input
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  placeholder="Doe"
+                />
+              </div>
             </div>
 
             <div className="grid gap-2">
@@ -636,30 +751,38 @@ const Mentorship = () => {
                 type="email"
                 value={formData.student_email}
                 onChange={(e) => setFormData({ ...formData, student_email: e.target.value })}
-                placeholder="john@example.com"
+                placeholder="john.doe@example.com"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="age">Age *</Label>
+              <Label htmlFor="phone">Phone Number *</Label>
               <Input
-                id="age"
-                type="number"
-                value={formData.student_age}
-                onChange={(e) => setFormData({ ...formData, student_age: e.target.value })}
-                placeholder="22"
-                min="13"
-                max="120"
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+233 24 123 4567"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="university">University *</Label>
+              <Label htmlFor="date_of_birth">Date of Birth *</Label>
               <Input
-                id="university"
-                value={formData.student_university}
-                onChange={(e) => setFormData({ ...formData, student_university: e.target.value })}
-                placeholder="University of Ghana"
+                id="date_of_birth"
+                type="date"
+                value={formData.date_of_birth}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="institution">Institution *</Label>
+              <Input
+                id="institution"
+                value={formData.student_institution}
+                onChange={(e) => setFormData({ ...formData, student_institution: e.target.value })}
+                placeholder="University of Ghana / Ashesi University / ..."
               />
             </div>
 
@@ -669,7 +792,7 @@ const Mentorship = () => {
                 id="course"
                 value={formData.student_course}
                 onChange={(e) => setFormData({ ...formData, student_course: e.target.value })}
-                placeholder="Computer Science"
+                placeholder="BSc Computer Science"
               />
             </div>
 
@@ -679,17 +802,18 @@ const Mentorship = () => {
                 id="level"
                 value={formData.student_level}
                 onChange={(e) => setFormData({ ...formData, student_level: e.target.value })}
-                placeholder="Level 400 / Final Year"
+                placeholder="Level 300 / 3rd Year / Masters Year 1"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="phone">Phone (optional)</Label>
-              <Input
-                id="phone"
-                value={formData.student_phone}
-                onChange={(e) => setFormData({ ...formData, student_phone: e.target.value })}
-                placeholder="+233 123 456 789"
+              <Label htmlFor="topic_description">What would you like to discuss? *</Label>
+              <Textarea
+                id="topic_description"
+                value={formData.topic_description}
+                onChange={(e) => setFormData({ ...formData, topic_description: e.target.value })}
+                placeholder="e.g. Career switch to data analysis, CV review for tech roles, preparing for software engineering interviews, how to negotiate salary, etc."
+                className="min-h-[100px]"
               />
             </div>
 
@@ -697,7 +821,7 @@ const Mentorship = () => {
               <Label>Preferred Date *</Label>
               <Input
                 type="date"
-                min={new Date().toISOString().split('T')[0]}
+                min={new Date().toISOString().split("T")[0]}
                 value={selectedDate}
                 onChange={async (e) => {
                   const date = e.target.value;
@@ -706,8 +830,8 @@ const Mentorship = () => {
                   if (date && selectedMentor) {
                     try {
                       const res = await api.get(`/api/mentors/${selectedMentor.uuid}/available-slots?date=${date}`);
-                      setAvailableTimes(res.data);
-                    } catch {
+                      setAvailableTimes(res.data || []);
+                    } catch (err) {
                       setAvailableTimes([]);
                       toast.error("Could not load available times");
                     }
@@ -718,15 +842,15 @@ const Mentorship = () => {
 
             {selectedDate && (
               <div className="grid gap-2">
-                <Label>Available Time *</Label>
+                <Label>Available Time Slots *</Label>
                 {availableTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
-                    {availableTimes.map(time => (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                    {availableTimes.map((time) => (
                       <Button
                         key={time}
-                        variant={formData.scheduled_at === `${selectedDate}T${time}:00` ? "default" : "outline"}
+                        variant={formData.scheduled_at === `${selectedDate}T${time}` ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}:00` })}
+                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}` })}
                       >
                         {time}
                       </Button>
@@ -741,17 +865,35 @@ const Mentorship = () => {
             )}
           </div>
 
-          <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onClick={() => setBookingOpen(false)}>
               Cancel
             </Button>
             <Button
               variant="accent"
               onClick={handleSubmitBooking}
-              disabled={!formData.scheduled_at || bookingLoading}
+              disabled={bookingLoading || !formData.scheduled_at}
             >
-              {bookingLoading ? "Connecting..." : "Proceed to Payment"}
+              {bookingLoading ? "Processing..." : "Proceed to Payment"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bioOpen} onOpenChange={setBioOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="relative pb-4">
+            <DialogTitle className="pr-10 text-2xl">
+              {selectedBioMentor ? getFullName(selectedBioMentor) : "Mentor"} - Full Bio
+            </DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="absolute right-2 top-2">
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogClose>
+          </DialogHeader>
+          <div className="mt-2 text-muted-foreground leading-relaxed whitespace-pre-wrap text-base">
+            {selectedBioMentor?.bio || "No detailed bio available for this mentor."}
           </div>
         </DialogContent>
       </Dialog>

@@ -100,7 +100,7 @@ const About = () => {
               We're on a mission to transform how students discover and secure meaningful internship opportunities that launch their careers.
             </p>
 
-            <div className="flex flex-wrap justify-center gap-4">
+            {/* <div className="flex flex-wrap justify-center gap-4">
               <Link to="/internships">
                 <Button variant="hero" size="xl">
                   Browse Opportunities
@@ -112,7 +112,7 @@ const About = () => {
                   Meet Our Counselors
                 </Button>
               </Link>
-            </div>
+            </div> */}
           </motion.div>
         </div>
       </section>

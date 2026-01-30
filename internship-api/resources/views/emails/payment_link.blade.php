@@ -15,7 +15,7 @@
     <div style="text-align: center; margin: 30px 0;">
         <a href="{{ $paymentUrl }}"
            style="background: #0066CC; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;">
-            Pay Now with Paystack
+            Pay Now
         </a>
     </div>
 

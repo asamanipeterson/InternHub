@@ -13,7 +13,6 @@ class Mentor extends Model
     protected $fillable = [
         'user_id',
         'uuid',
-        'name',
         'title',
         'specialization',
         'bio',
@@ -21,18 +20,17 @@ class Mentor extends Model
         'experience',
         'rating',
         'session_price',
-        'email',
-        'google_calendar_email', // Replaced zoom_email
+        'google_calendar_email',
         'google_access_token',
         'google_refresh_token',
         'google_token_expires_in',
-        'google_token_created_at'
+        'google_token_created_at',
     ];
 
     protected $casts = [
-        'experience' => 'integer',
-        'rating' => 'decimal:2',
-        'session_price' => 'decimal:2',
+        'experience'              => 'integer',
+        'rating'                  => 'decimal:2',
+        'session_price'           => 'decimal:2',
         'google_token_created_at' => 'datetime',
     ];
 
@@ -121,12 +119,10 @@ class Mentor extends Model
     }
 
     /**
-     * Check if Google is connected (Accessors)
+     * Check if Google is connected
      */
     public function getIsGoogleConnectedAttribute()
     {
-        // We check refresh_token because access_tokens expire frequently,
-        // but a refresh_token means we have persistent access.
         return !empty($this->google_refresh_token);
     }
 }

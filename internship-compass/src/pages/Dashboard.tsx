@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Tabs,
@@ -54,6 +55,10 @@ import {
   Search as SearchIcon,
   Shield,
   Loader2,
+  BarChart,
+  Star,
+  Award,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -75,7 +80,6 @@ interface Company {
 interface Mentor {
   id: string;
   uuid: string;
-  name: string;
   title: string;
   specialization: string | null;
   bio: string | null;
@@ -84,7 +88,13 @@ interface Mentor {
   rating: number | string;
   session_price: number | string;
   google_calendar_email?: string | null;
-  user?: { email: string };
+  user: {
+    id: string;
+    first_name: string | null;
+    middle_name: string | null;
+    last_name: string | null;
+    email: string;
+  };
 }
 
 interface Booking {
@@ -188,7 +198,9 @@ const Dashboard = () => {
   const [mentorFile, setMentorFile] = useState<File | null>(null);
   const [mentorPreview, setMentorPreview] = useState<string | null>(null);
   const [mentorForm, setMentorForm] = useState({
-    name: "",
+    first_name: "",
+    middle_name: "",
+    last_name: "",
     email: "",
     title: "",
     specialization: "",
@@ -213,12 +225,16 @@ const Dashboard = () => {
   const [currentStudentName, setCurrentStudentName] = useState<string>("");
   const [currentCompanyName, setCurrentCompanyName] = useState<string>("");
 
+  const [bioOpen, setBioOpen] = useState(false);
+  const [selectedBioMentor, setSelectedBioMentor] = useState<Mentor | null>(null);
+
   const [industrySearch, setIndustrySearch] = useState("");
   const [visibleIndustryCount, setVisibleIndustryCount] = useState(INDUSTRIES_PER_LOAD);
   const [visibleCompanies, setVisibleCompanies] = useState(ITEMS_PER_PAGE);
   const [visibleMentors, setVisibleMentors] = useState(ITEMS_PER_PAGE);
 
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
+  const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
   const [adminForm, setAdminForm] = useState({
     email: "",
     industries: [] as string[],
@@ -237,13 +253,13 @@ const Dashboard = () => {
   const bookedMentorships = mentorBookings.length;
 
   const stats = [
-    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary", onClick: () => navigate("/companies-dashboard") },
-    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent" },
-    { icon: CheckCircle, label: "Booked Slots", value: bookedSlots, color: "bg-blue-500", onClick: () => navigate("/booked-slots") },
-    { icon: Clock, label: "Pending Internships", value: pendingInternshipBookings, color: "bg-yellow-500", onClick: () => navigate("/pending-applications") },
-    { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500" },
-    { icon: UserCircle, label: "Mentors", value: mentors.length, color: "bg-muted-foreground", onClick: () => navigate("/mentors-dashboard") },
-    { icon: CalendarIcon, label: "Booked Mentorships", value: bookedMentorships, color: "bg-purple-500", onClick: () => navigate("/admin/mentorship-bookings") },
+    { icon: Building, label: "Companies", value: companies.length, color: "bg-primary", clickable: false },
+    { icon: BarChart3, label: "Total Slots", value: totalSlots, color: "bg-accent", clickable: false },
+    { icon: CheckCircle, label: "Booked Slots", value: bookedSlots, color: "bg-blue-500", clickable: true, onClick: () => navigate("/booked-slots") },
+    { icon: Clock, label: "Pending Internships", value: pendingInternshipBookings, color: "bg-yellow-500", clickable: true, onClick: () => navigate("/pending-applications") },
+    { icon: Users, label: "Available Slots", value: availableSlotsTotal, color: "bg-green-500", clickable: false },
+    { icon: UserCircle, label: "Mentors", value: mentors.length, color: "bg-muted-foreground", clickable: false },
+    { icon: CalendarIcon, label: "Booked Mentorships", value: bookedMentorships, color: "bg-purple-500", clickable: true, onClick: () => navigate("/admin/mentorship-bookings") },
   ];
 
   useEffect(() => {
@@ -345,6 +361,11 @@ const Dashboard = () => {
     setAvailabilityDialogOpen(true);
   };
 
+  const openBioDialog = (mentor: Mentor) => {
+    setSelectedBioMentor(mentor);
+    setBioOpen(true);
+  };
+
   const handleSaveAvailability = async () => {
     if (!selectedMentorForAvailability) return;
     if (availabilityForm.selectedDays.length === 0) {
@@ -411,7 +432,6 @@ const Dashboard = () => {
       toast.error("Please fill in required fields");
       return;
     }
-
     const formData = new FormData();
     formData.append("name", companyForm.name);
     formData.append("industry", companyForm.industry);
@@ -480,8 +500,8 @@ const Dashboard = () => {
   };
 
   const handleSaveMentor = async () => {
-    if (!mentorForm.name || !mentorForm.email || !mentorForm.title || !mentorForm.session_price) {
-      toast.error("Please fill in all required fields: name, email, title, session price");
+    if (!mentorForm.first_name || !mentorForm.last_name || !mentorForm.email || !mentorForm.title || !mentorForm.session_price) {
+      toast.error("Please fill in all required fields: first name, last name, email, title, session price");
       return;
     }
 
@@ -492,15 +512,17 @@ const Dashboard = () => {
     }
 
     const formData = new FormData();
-    formData.append("name", mentorForm.name);
+    formData.append("first_name", mentorForm.first_name.trim());
+    formData.append("middle_name", mentorForm.middle_name?.trim() || "");
+    formData.append("last_name", mentorForm.last_name.trim());
     formData.append("email", mentorForm.email.trim());
-    formData.append("title", mentorForm.title);
-    formData.append("specialization", mentorForm.specialization || "");
-    formData.append("bio", mentorForm.bio || "");
+    formData.append("title", mentorForm.title.trim());
+    formData.append("specialization", mentorForm.specialization?.trim() || "");
+    formData.append("bio", mentorForm.bio?.trim() || "");
     formData.append("experience", mentorForm.experience.toString());
     formData.append("rating", mentorForm.rating.toString());
     formData.append("session_price", mentorForm.session_price.toString());
-    formData.append("google_calendar_email", mentorForm.google_calendar_email || "");
+    formData.append("google_calendar_email", mentorForm.google_calendar_email?.trim() || "");
     if (mentorFile) formData.append("image", mentorFile);
 
     try {
@@ -514,7 +536,9 @@ const Dashboard = () => {
       setMentorDialogOpen(false);
       setEditingMentor(null);
       setMentorForm({
-        name: "",
+        first_name: "",
+        middle_name: "",
+        last_name: "",
         email: "",
         title: "",
         specialization: "",
@@ -541,7 +565,9 @@ const Dashboard = () => {
   const handleEditMentor = (mentor: Mentor) => {
     setEditingMentor(mentor);
     setMentorForm({
-      name: mentor.name,
+      first_name: mentor.user?.first_name || "",
+      middle_name: mentor.user?.middle_name || "",
+      last_name: mentor.user?.last_name || "",
       email: mentor.user?.email || "",
       title: mentor.title,
       specialization: mentor.specialization || "",
@@ -627,6 +653,30 @@ const Dashboard = () => {
     }
   };
 
+  const handleUpdateIndustryAdmin = async () => {
+    if (!editingAdminId || adminForm.industries.length === 0) {
+      toast.error("No admin selected or no industries assigned");
+      return;
+    }
+
+    try {
+      await api.put(`/api/admin/industry-admins/${editingAdminId}`, {
+        industries: adminForm.industries,
+      });
+
+      toast.success("Industry assignments updated successfully");
+      setAdminDialogOpen(false);
+      setEditingAdminId(null);
+      setAdminForm({ email: "", industries: [] });
+
+      const adminsRes = await api.get("/api/admin/industry-admins");
+      setIndustryAdmins(adminsRes.data || []);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Failed to update assignments";
+      toast.error(msg);
+    }
+  };
+
   const openCvModal = (booking: Booking) => {
     setCurrentCvPath(booking.cv_path);
     setCurrentStudentName(booking.student_name);
@@ -652,18 +702,46 @@ const Dashboard = () => {
   const loadMoreCompanies = () => setVisibleCompanies(prev => prev + ITEMS_PER_PAGE);
   const loadMoreMentors = () => setVisibleMentors(prev => prev + ITEMS_PER_PAGE);
 
+  const getFullName = (mentor: Mentor) => {
+    const parts = [
+      mentor.user?.first_name || "",
+      mentor.user?.middle_name || "",
+      mentor.user?.last_name || ""
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(" ") : "Mentor Name";
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
       <section className="pt-32 lg:pt-40 pb-8 gradient-hero">
         <div className="container mx-auto px-4 lg:px-8">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="text-center">
-            <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-2">Admin Dashboard</h1>
-            <p className="text-primary-foreground/80">
-              Manage companies, mentors, internship applications {isSuperAdmin && "and industry admins"}
-            </p>
-          </motion.div>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center md:text-left"
+            >
+              <h1 className="text-3xl md:text-4xl font-bold text-primary-foreground mb-2">
+                Admin Dashboard
+              </h1>
+              <p className="text-primary-foreground/80">
+                Manage companies, mentors, internship applications {isSuperAdmin && "and industry admins"}
+              </p>
+            </motion.div>
+
+            <Button
+              variant="default"
+              size="lg"
+              onClick={() => navigate("/admin/analyticspage")}
+              className="gap-2 whitespace-nowrap"
+            >
+              <BarChart className="h-5 w-5" />
+              View Analytics
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -674,9 +752,10 @@ const Dashboard = () => {
               <motion.div
                 key={stat.label}
                 variants={itemVariants}
-                whileHover={{ scale: stat.onClick ? 1.05 : 1.02 }}
-                className={`bg-card rounded-xl p-6 shadow-elevated border border-border text-center transition-all ${stat.onClick ? "cursor-pointer hover:shadow-xl" : ""}`}
-                onClick={stat.onClick}
+                className={`bg-card rounded-xl p-6 shadow-elevated border border-border text-center transition-all ${
+                  stat.clickable ? "cursor-pointer hover:shadow-xl" : ""
+                }`}
+                onClick={stat.clickable ? stat.onClick : undefined}
               >
                 <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mx-auto mb-3`}>
                   <stat.icon className="h-6 w-6 text-primary-foreground" />
@@ -694,24 +773,25 @@ const Dashboard = () => {
           <Tabs defaultValue="companies" className="space-y-6">
             <TabsList className="grid w-full max-w-lg grid-cols-5 mx-auto">
               <TabsTrigger value="companies" className="flex items-center gap-2">
-                Companies
+                <Building className="h-4 w-4" /> Companies
               </TabsTrigger>
               <TabsTrigger value="mentors" className="flex items-center gap-2">
-                Mentors
+                <Users className="h-4 w-4" /> Mentors
               </TabsTrigger>
               <TabsTrigger value="bookings" className="flex items-center gap-2">
-                 Bookings
+                <BookOpen className="h-4 w-4" /> Intern Booking
               </TabsTrigger>
               <TabsTrigger value="availability" className="flex items-center gap-2">
-               Availability
+                <CalendarIcon className="h-4 w-4" /> Availability
               </TabsTrigger>
               {isSuperAdmin && (
                 <TabsTrigger value="admins" className="flex items-center gap-2">
-                   Admins
+                  <Shield className="h-4 w-4" /> Intern Admins
                 </TabsTrigger>
               )}
             </TabsList>
 
+            {/* Companies Tab - fully implemented */}
             <TabsContent value="companies" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
@@ -761,9 +841,7 @@ const Dashboard = () => {
                             </SelectTrigger>
                             <SelectContent>
                               {INDUSTRIES.map((ind) => (
-                                <SelectItem key={ind} value={ind}>
-                                  {ind}
-                                </SelectItem>
+                                <SelectItem key={ind} value={ind}>{ind}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -820,7 +898,7 @@ const Dashboard = () => {
                       <div>
                         <Label>Location</Label>
                         <Input
-                          placeholder="e.g. San Francisco, CA"
+                          placeholder="e.g. Accra, Ghana"
                           value={companyForm.location}
                           onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
                         />
@@ -939,6 +1017,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
+            {/* Mentors Tab - fully implemented */}
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Mentors</h2>
@@ -947,7 +1026,9 @@ const Dashboard = () => {
                     <Button variant="accent" onClick={() => {
                       setEditingMentor(null);
                       setMentorForm({
-                        name: "",
+                        first_name: "",
+                        middle_name: "",
+                        last_name: "",
                         email: "",
                         title: "",
                         specialization: "",
@@ -991,6 +1072,7 @@ const Dashboard = () => {
                           Change Photo
                         </Button>
                       </div>
+
                       <div>
                         <Label>Email Address (login & notifications) *</Label>
                         <div className="relative mt-2">
@@ -1005,51 +1087,75 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <Label>Name *</Label>
+                          <Label>First Name *</Label>
                           <Input
-                            placeholder="Full Name"
-                            value={mentorForm.name}
-                            onChange={(e) => setMentorForm({ ...mentorForm, name: e.target.value })}
+                            placeholder="First"
+                            value={mentorForm.first_name}
+                            onChange={(e) => setMentorForm({ ...mentorForm, first_name: e.target.value })}
                           />
                         </div>
                         <div>
+                          <Label>Middle Name</Label>
+                          <Input
+                            placeholder="Middle (optional)"
+                            value={mentorForm.middle_name}
+                            onChange={(e) => setMentorForm({ ...mentorForm, middle_name: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Last Name *</Label>
+                          <Input
+                            placeholder="Last"
+                            value={mentorForm.last_name}
+                            onChange={(e) => setMentorForm({ ...mentorForm, last_name: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                           <Label>Job Title *</Label>
                           <Input
-                            placeholder="e.g. Senior Developer"
+                            placeholder="e.g. Senior Software Engineer"
                             value={mentorForm.title}
                             onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })}
                           />
                         </div>
+                        <div>
+                          <Label>Specialization</Label>
+                          <Input
+                            placeholder="e.g. Frontend, DevOps, Data Science"
+                            value={mentorForm.specialization}
+                            onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <Label>Specialization</Label>
-                        <Input
-                          placeholder="e.g. Frontend Architecture"
-                          value={mentorForm.specialization}
-                          onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
-                        />
-                      </div>
+
                       <div>
                         <Label>Bio</Label>
                         <Textarea
-                          placeholder="Mentor's professional background..."
+                          placeholder="Professional background, expertise, achievements..."
                           value={mentorForm.bio}
                           onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
+                          rows={4}
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <Label>Experience (years)</Label>
+                          <Label>Experience (years) *</Label>
                           <Input
                             type="number"
+                            min="0"
                             value={mentorForm.experience}
                             onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })}
                           />
                         </div>
                         <div>
-                          <Label>Rating</Label>
+                          <Label>Rating (0-5)</Label>
                           <Input
                             type="number"
                             step="0.1"
@@ -1059,29 +1165,29 @@ const Dashboard = () => {
                             onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })}
                           />
                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Session Price (GHS) *</Label>
                           <Input
                             type="number"
                             step="0.01"
+                            min="0"
                             value={mentorForm.session_price}
                             onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })}
-                            placeholder="200.00"
-                          />
-                        </div>
-                        <div>
-                          <Label>Google Calendar Email (for auto Meet creation)</Label>
-                          <Input
-                            type="email"
-                            placeholder="mentor@gmail.com"
-                            value={mentorForm.google_calendar_email}
-                            onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
                           />
                         </div>
                       </div>
-                      <Button variant="accent" className="w-full" onClick={handleSaveMentor}>
+
+                      <div>
+                        <Label>Google Calendar Email (for auto Meet links)</Label>
+                        <Input
+                          type="email"
+                          placeholder="mentor@gmail.com"
+                          value={mentorForm.google_calendar_email}
+                          onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
+                        />
+                      </div>
+
+                      <Button variant="accent" className="w-full mt-6" onClick={handleSaveMentor}>
                         {editingMentor ? "Update Mentor" : "Add Mentor"}
                       </Button>
                     </div>
@@ -1089,49 +1195,119 @@ const Dashboard = () => {
                 </Dialog>
               </motion.div>
 
-              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {displayedMentors.map((mentor) => (
-                  <motion.div
-                    key={mentor.id}
-                    variants={itemVariants}
-                    whileHover={{ y: -4 }}
-                    className="bg-card rounded-xl p-6 shadow-soft border border-border"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        {mentor.image ? (
-                          <img
-                            src={`/${mentor.image}`}
-                            alt={mentor.name}
-                            className="w-12 h-12 rounded-full object-cover border border-border"
+              <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {displayedMentors.map((mentor, index) => {
+                  const fullName = getFullName(mentor);
+                  const bioText = mentor.bio || "Dedicated mentor committed to your career success.";
+                  const isLongBio = bioText.length > 30;
+                  const truncatedBio = isLongBio ? bioText.substring(0, 30) + "..." : bioText;
+
+                  return (
+                    <motion.div
+                      key={mentor.id}
+                      variants={itemVariants}
+                      whileHover={{ y: -10, scale: 1.02 }}
+                      className="group"
+                    >
+                      <div className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer">
+                        <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
+                          <motion.div
+                            className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
+                            initial={{ x: "-100%" }}
+                            whileHover={{ x: "100%" }}
+                            transition={{ duration: 0.8 }}
                           />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-2xl">User</div>
-                        )}
-                        <div>
-                          <h3 className="font-semibold">{mentor.name}</h3>
-                          <p className="text-sm text-accent">{mentor.title}</p>
+                          {mentor.image ? (
+                            <img
+                              src={`/${mentor.image}`}
+                              alt={fullName}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <motion.span
+                              className="text-8xl relative z-10"
+                              whileHover={{
+                                scale: 1.2,
+                                rotate: [0, -15, 15, -15, 15, 0],
+                                transition: { duration: 0.6, type: "spring", stiffness: 300 },
+                              }}
+                            >
+                              👤
+                            </motion.span>
+                          )}
+                          <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                            <Star className="w-4 h-4 text-accent fill-accent" />
+                            <span className="text-sm font-bold text-foreground">
+                              {Number(mentor.rating).toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-6">
+                          <div className="mb-4">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-1">
+                                  {fullName}
+                                </h3>
+                                <p className="text-accent font-semibold">{mentor.title}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
+                            <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                              <Award className="w-3.5 h-3.5 text-primary" />
+                              {mentor.specialization || "General"}
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                              <Clock className="w-3.5 h-3.5 text-primary" />
+                              {mentor.experience}+ yrs
+                            </span>
+                          </div>
+
+                          <div className="mb-6">
+                            <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 min-h-[3rem]">
+                              {truncatedBio}
+                            </p>
+                            {isLongBio && (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="text-accent hover:text-accent/80 p-0 mt-1 h-auto font-medium"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openBioDialog(mentor);
+                                }}
+                              >
+                                Read More
+                              </Button>
+                            )}
+                          </div>
+
+                          <div className="mb-4 text-center">
+                            <p className="text-sm text-muted-foreground">Session Fee</p>
+                            <p className="text-3xl font-bold text-accent">
+                              GHS {(Number(mentor.session_price) || 0).toFixed(2)}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEditMentor(mentor)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMentor(mentor.uuid)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">{mentor.specialization || "General"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {mentor.experience} years experience • ⭐ {Number(mentor.rating).toFixed(1)} • GHS {(Number(mentor.session_price) || 0).toFixed(2)}
-                    </p>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </motion.div>
 
               {hasMoreMentors && (
-                <div className="text-center">
+                <div className="text-center mt-8">
                   <Button variant="accent" size="lg" onClick={loadMoreMentors}>
                     Load More Mentors
                   </Button>
@@ -1139,6 +1315,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
+            {/* Bookings Tab */}
             <TabsContent value="bookings" className="space-y-8">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-bold">Internship Applications by Industry</h2>
@@ -1263,6 +1440,7 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
+            {/* Availability Tab */}
             <TabsContent value="availability" className="space-y-8">
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -1287,14 +1465,14 @@ const Dashboard = () => {
                         key={mentor.uuid}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-card p-6 rounded-xl border border-border shadow-soft hover:shadow-md transition-shadow"
+                        className="bg-card p-6 rounded-xl border border-border shadow-soft"
                       >
                         <div className="flex justify-between items-start mb-4">
                           <div className="flex items-center gap-3">
                             {mentor.image ? (
                               <img
                                 src={`/${mentor.image}`}
-                                alt={mentor.name}
+                                alt={`${mentor.user?.first_name || ""} ${mentor.user?.last_name || ""}`}
                                 className="w-12 h-12 rounded-full object-cover border"
                               />
                             ) : (
@@ -1303,7 +1481,11 @@ const Dashboard = () => {
                               </div>
                             )}
                             <div>
-                              <h3 className="font-semibold">{mentor.name}</h3>
+                              <h3 className="font-semibold">
+                                {mentor.user?.first_name || ""}{" "}
+                                {mentor.user?.middle_name ? mentor.user.middle_name + " " : ""}
+                                {mentor.user?.last_name || "Mentor"}
+                              </h3>
                               <p className="text-sm text-muted-foreground">{mentor.title}</p>
                             </div>
                           </div>
@@ -1328,12 +1510,17 @@ const Dashboard = () => {
               </div>
             </TabsContent>
 
+            {/* Admins Tab - with exclusive assignment & edit support */}
             {isSuperAdmin && (
               <TabsContent value="admins" className="space-y-8">
                 <motion.div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Manage Industry Admins</h2>
-                  <Button variant="accent" onClick={() => setAdminDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" /> Create Industry Admin
+                  <h2 className="text-xl font-semibold">Manage Intern Admins</h2>
+                  <Button variant="accent" onClick={() => {
+                    setEditingAdminId(null);
+                    setAdminForm({ email: "", industries: [] });
+                    setAdminDialogOpen(true);
+                  }}>
+                    <Plus className="h-4 w-4 mr-2" /> Create Intern Admin
                   </Button>
                 </motion.div>
 
@@ -1341,24 +1528,32 @@ const Dashboard = () => {
                   {industryAdmins.length === 0 ? (
                     <div className="col-span-full text-center py-12 bg-muted/30 rounded-xl border border-border">
                       <Shield className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">No industry admins yet</h3>
+                      <h3 className="text-xl font-semibold mb-2">No intern admins yet</h3>
                       <p className="text-muted-foreground">
                         Create one using the button above.
                       </p>
                     </div>
                   ) : (
                     industryAdmins.map((admin) => (
-                      <div key={admin.id} className="bg-card rounded-xl p-6 border border-border shadow-soft">
+                      <div
+                        key={admin.id}
+                        className="bg-card rounded-xl p-6 border border-border shadow-soft hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between mb-4">
                           <div>
-                            <h3 className="font-semibold text-lg">{admin.name || admin.email.split('@')[0]}</h3>
+                            <h3 className="font-semibold text-lg">
+                              {admin.name || admin.email.split('@')[0]}
+                            </h3>
                             <p className="text-sm text-muted-foreground">{admin.email}</p>
                           </div>
-                          <Shield className="h-5 w-5 text-primary" />
+                          <Shield className="h-5 w-5 text-primary mt-1" />
                         </div>
-                        <div className="flex flex-wrap gap-2">
+
+                        <div className="flex flex-wrap gap-2 mb-4">
                           {admin.industries.length === 0 ? (
-                            <span className="text-sm text-muted-foreground italic">No industries assigned</span>
+                            <span className="text-sm text-muted-foreground italic">
+                              No industries assigned
+                            </span>
                           ) : (
                             admin.industries.map((ind) => (
                               <Badge key={ind} variant="outline" className="bg-secondary">
@@ -1367,31 +1562,62 @@ const Dashboard = () => {
                             ))
                           )}
                         </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            setAdminForm({
+                              email: admin.email,
+                              industries: admin.industries,
+                            });
+                            setEditingAdminId(admin.id);
+                            setAdminDialogOpen(true);
+                          }}
+                        >
+                          Edit Assignments
+                        </Button>
                       </div>
                     ))
                   )}
                 </div>
 
-                <Dialog open={adminDialogOpen} onOpenChange={setAdminDialogOpen}>
+                <Dialog open={adminDialogOpen} onOpenChange={(open) => {
+                  setAdminDialogOpen(open);
+                  if (!open) {
+                    setAdminForm({ email: "", industries: [] });
+                    setEditingAdminId(null);
+                  }
+                }}>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Create Industry Admin</DialogTitle>
+                      <DialogTitle>
+                        {editingAdminId ? "Edit Industry Admin" : "Create Intern Admin"}
+                      </DialogTitle>
                       <DialogDescription>
-                        Enter the admin's email and assign industries. A set-password email will be sent.
+                        {editingAdminId
+                          ? "Update assigned industries. An industry can only belong to one admin."
+                          : "Enter email and assign industries. A set-password email will be sent."}
                       </DialogDescription>
                     </DialogHeader>
+
                     <div className="space-y-6 py-4">
+                      {!editingAdminId && (
+                        <div>
+                          <Label>Email Address *</Label>
+                          <Input
+                            type="email"
+                            placeholder="admin@example.com"
+                            value={adminForm.email}
+                            onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                            disabled={!!editingAdminId}
+                          />
+                        </div>
+                      )}
+
                       <div>
-                        <Label>Email Address *</Label>
-                        <Input
-                          type="email"
-                          placeholder="admin@example.com"
-                          value={adminForm.email}
-                          onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Assign Industries *</Label>
+                        <Label>Assigned Industries *</Label>
                         <Select
                           onValueChange={(val) => {
                             if (!adminForm.industries.includes(val)) {
@@ -1403,7 +1629,7 @@ const Dashboard = () => {
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select one or more industries" />
+                            <SelectValue placeholder="Select industries..." />
                           </SelectTrigger>
                           <SelectContent>
                             {INDUSTRIES.filter(ind => !adminForm.industries.includes(ind)).map(ind => (
@@ -1432,14 +1658,23 @@ const Dashboard = () => {
                               </button>
                             </div>
                           ))}
+                          {adminForm.industries.length === 0 && (
+                            <p className="text-sm text-muted-foreground italic">
+                              No industries selected
+                            </p>
+                          )}
                         </div>
                       </div>
+
                       <Button
                         className="w-full"
-                        onClick={handleCreateIndustryAdmin}
-                        disabled={!adminForm.email || adminForm.industries.length === 0}
+                        onClick={editingAdminId ? handleUpdateIndustryAdmin : handleCreateIndustryAdmin}
+                        disabled={
+                          (editingAdminId ? false : !adminForm.email.trim()) ||
+                          adminForm.industries.length === 0
+                        }
                       >
-                        Create & Send Set-Password Email
+                        {editingAdminId ? "Update Assignments" : "Create & Send Email"}
                       </Button>
                     </div>
                   </DialogContent>
@@ -1450,12 +1685,307 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* Bio Read More Dialog */}
+      <Dialog open={bioOpen} onOpenChange={setBioOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="relative pb-4">
+            <DialogTitle className="pr-10 text-2xl">
+              {selectedBioMentor ? getFullName(selectedBioMentor) : "Mentor"} - Full Bio
+            </DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="absolute right-2 top-2">
+                <X className="h-5 w-5" />
+              </Button>
+            </DialogClose>
+          </DialogHeader>
+          <div className="mt-2 text-muted-foreground leading-relaxed whitespace-pre-wrap text-base">
+            {selectedBioMentor?.bio || "No detailed bio available for this mentor."}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Dialog */}
+      <Dialog open={companyDialogOpen} onOpenChange={setCompanyDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingCompany ? "Edit Company" : "Add New Company"}</DialogTitle>
+            <DialogDescription>Fill in the company details below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 md:col-span-1">
+                <Label>Company Name *</Label>
+                <Input
+                  placeholder="Enter name"
+                  value={companyForm.name}
+                  onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2 md:col-span-1">
+                <Label>Industry *</Label>
+                <Select
+                  value={companyForm.industry}
+                  onValueChange={(val) => setCompanyForm({ ...companyForm, industry: val })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDUSTRIES.map((ind) => (
+                      <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Paid Internship? *</Label>
+              <select
+                value={companyForm.is_paid ? "yes" : "no"}
+                onChange={(e) => setCompanyForm({ ...companyForm, is_paid: e.target.value === "yes" })}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="yes">Yes – Paid internship</option>
+                <option value="no">No – Unpaid / Volunteer</option>
+              </select>
+            </div>
+            <div>
+              <Label>Internship Requirements</Label>
+              <Textarea
+                placeholder="One requirement per line (will be shown as numbered list)\nExample:\nPursuing Computer Science degree\nKnowledge of React\nGood communication skills"
+                value={companyForm.requirements}
+                onChange={(e) => setCompanyForm({ ...companyForm, requirements: e.target.value })}
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground mt-1">One per line</p>
+            </div>
+            <div>
+              <Label>Company Logo</Label>
+              <div className="mt-2 flex items-center gap-4">
+                <div
+                  className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer"
+                  onClick={() => companyFileInputRef.current?.click()}
+                >
+                  {companyPreview ? (
+                    <img src={companyPreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="text-muted-foreground w-6 h-6" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    ref={companyFileInputRef}
+                    className="hidden"
+                    onChange={handleCompanyImageChange}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => companyFileInputRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-2" /> Upload Logo
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label>Location</Label>
+              <Input
+                placeholder="e.g. Accra, Ghana"
+                value={companyForm.location}
+                onChange={(e) => setCompanyForm({ ...companyForm, location: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                placeholder="Briefly describe the company..."
+                value={companyForm.description}
+                onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Total Slots</Label>
+                <Input
+                  type="number"
+                  value={companyForm.total_slots}
+                  onChange={(e) => setCompanyForm({ ...companyForm, total_slots: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>Available Slots</Label>
+                <Input
+                  type="number"
+                  value={companyForm.available_slots}
+                  onChange={(e) => setCompanyForm({ ...companyForm, available_slots: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+            <Button variant="accent" className="w-full" onClick={handleSaveCompany}>
+              {editingCompany ? "Update Company" : "Add Company"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mentor Dialog */}
+      <Dialog open={mentorDialogOpen} onOpenChange={setMentorDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingMentor ? "Edit Mentor" : "Add New Mentor"}</DialogTitle>
+            <DialogDescription>Fill in the mentor details below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="flex flex-col items-center mb-4">
+              <div
+                className="w-24 h-24 rounded-full border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-secondary/30 cursor-pointer mb-2"
+                onClick={() => mentorFileInputRef.current?.click()}
+              >
+                {mentorPreview ? (
+                  <img src={mentorPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="text-muted-foreground w-10 h-10" />
+                )}
+              </div>
+              <Input
+                type="file"
+                accept="image/*"
+                ref={mentorFileInputRef}
+                className="hidden"
+                onChange={handleMentorImageChange}
+              />
+              <Button type="button" variant="ghost" size="sm" onClick={() => mentorFileInputRef.current?.click()}>
+                Change Photo
+              </Button>
+            </div>
+
+            <div>
+              <Label>Email Address (login & notifications) *</Label>
+              <div className="relative mt-2">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                  type="email"
+                  placeholder="mentor@example.com"
+                  value={mentorForm.email}
+                  onChange={(e) => setMentorForm({ ...mentorForm, email: e.target.value.trim() })}
+                  className="pl-10 h-12 bg-secondary/50 border-border focus:border-primary"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label>First Name *</Label>
+                <Input
+                  placeholder="First"
+                  value={mentorForm.first_name}
+                  onChange={(e) => setMentorForm({ ...mentorForm, first_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Middle Name</Label>
+                <Input
+                  placeholder="Middle (optional)"
+                  value={mentorForm.middle_name}
+                  onChange={(e) => setMentorForm({ ...mentorForm, middle_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Last Name *</Label>
+                <Input
+                  placeholder="Last"
+                  value={mentorForm.last_name}
+                  onChange={(e) => setMentorForm({ ...mentorForm, last_name: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Job Title *</Label>
+                <Input
+                  placeholder="e.g. Senior Software Engineer"
+                  value={mentorForm.title}
+                  onChange={(e) => setMentorForm({ ...mentorForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Specialization</Label>
+                <Input
+                  placeholder="e.g. Frontend, DevOps, Data Science"
+                  value={mentorForm.specialization}
+                  onChange={(e) => setMentorForm({ ...mentorForm, specialization: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Bio</Label>
+              <Textarea
+                placeholder="Professional background, expertise, achievements..."
+                value={mentorForm.bio}
+                onChange={(e) => setMentorForm({ ...mentorForm, bio: e.target.value })}
+                rows={4}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label>Experience (years) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={mentorForm.experience}
+                  onChange={(e) => setMentorForm({ ...mentorForm, experience: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>Rating (0-5)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={mentorForm.rating}
+                  onChange={(e) => setMentorForm({ ...mentorForm, rating: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>Session Price (GHS) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={mentorForm.session_price}
+                  onChange={(e) => setMentorForm({ ...mentorForm, session_price: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Google Calendar Email (for auto Meet links)</Label>
+              <Input
+                type="email"
+                placeholder="mentor@gmail.com"
+                value={mentorForm.google_calendar_email}
+                onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
+              />
+            </div>
+
+            <Button variant="accent" className="w-full mt-6" onClick={handleSaveMentor}>
+              {editingMentor ? "Update Mentor" : "Add Mentor"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Availability Dialog */}
       <Dialog open={availabilityDialogOpen} onOpenChange={setAvailabilityDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5" />
-              Set Availability – {selectedMentorForAvailability?.name}
+              Set Availability – {selectedMentorForAvailability?.user?.first_name || ""} {selectedMentorForAvailability?.user?.last_name || "Mentor"}
             </DialogTitle>
             <DialogDescription>
               Define recurring weekly availability slots for this mentor.
@@ -1528,15 +2058,16 @@ const Dashboard = () => {
                 <Input
                   type="time"
                   value={availabilityForm.start_time}
-                  onChange={e => setAvailabilityForm(prev => ({ ...prev, start_time: e.target.value }))}
+                  onChange={(e) => setAvailabilityForm(prev => ({ ...prev, start_time: e.target.value }))}
                 />
               </div>
+
               <div>
                 <Label>End Time</Label>
                 <Input
                   type="time"
                   value={availabilityForm.end_time}
-                  onChange={e => setAvailabilityForm(prev => ({ ...prev, end_time: e.target.value }))}
+                  onChange={(e) => setAvailabilityForm(prev => ({ ...prev, end_time: e.target.value }))}
                 />
               </div>
             </div>
@@ -1566,6 +2097,7 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
+      {/* CV Modal */}
       <Dialog open={cvModalOpen} onOpenChange={setCvModalOpen}>
         <DialogContent className="max-w-5xl w-full h-[90vh] max-h-screen p-0 flex flex-col">
           <DialogHeader className="p-6 pb-3 flex flex-row items-center justify-between border-b bg-card">
@@ -1590,6 +2122,104 @@ const Dashboard = () => {
                 <p>No CV uploaded</p>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Dialog - Create / Edit */}
+      <Dialog open={adminDialogOpen} onOpenChange={(open) => {
+        setAdminDialogOpen(open);
+        if (!open) {
+          setAdminForm({ email: "", industries: [] });
+          setEditingAdminId(null);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAdminId ? "Edit Industry Admin" : "Create Intern Admin"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingAdminId
+                ? "Update assigned industries. An industry can only belong to one admin."
+                : "Enter email and assign industries. A set-password email will be sent."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {!editingAdminId && (
+              <div>
+                <Label>Email Address *</Label>
+                <Input
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={adminForm.email}
+                  onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                  disabled={!!editingAdminId}
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Assigned Industries *</Label>
+              <Select
+                onValueChange={(val) => {
+                  if (!adminForm.industries.includes(val)) {
+                    setAdminForm(prev => ({
+                      ...prev,
+                      industries: [...prev.industries, val]
+                    }));
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select industries..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {INDUSTRIES.filter(ind => !adminForm.industries.includes(ind)).map(ind => (
+                    <SelectItem key={ind} value={ind}>
+                      {ind}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {adminForm.industries.map(ind => (
+                  <div
+                    key={ind}
+                    className="bg-secondary px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                  >
+                    {ind}
+                    <button
+                      onClick={() => setAdminForm(prev => ({
+                        ...prev,
+                        industries: prev.industries.filter(i => i !== ind)
+                      }))}
+                      className="text-red-500 hover:text-red-700 text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {adminForm.industries.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic">
+                    No industries selected
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={editingAdminId ? handleUpdateIndustryAdmin : handleCreateIndustryAdmin}
+              disabled={
+                (editingAdminId ? false : !adminForm.email.trim()) ||
+                adminForm.industries.length === 0
+              }
+            >
+              {editingAdminId ? "Update Assignments" : "Create & Send Email"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

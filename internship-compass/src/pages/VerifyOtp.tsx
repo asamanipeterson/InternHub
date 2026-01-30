@@ -9,24 +9,44 @@ import api from "@/lib/api";
 const VerifyOtp = () => {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [timeLeft, setTimeLeft] = useState(60); 
+  const [timeLeft, setTimeLeft] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<HTMLInputElement[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null); // ← store interval ID
 
-  useEffect(() => {
-    const timer = setInterval(() => {
+  // Function to start (or restart) the countdown
+  const startTimer = () => {
+    // Clear any existing timer first
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
+    setTimeLeft(30);
+    setCanResend(false);
+
+    timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
+          if (timerRef.current) clearInterval(timerRef.current);
           setCanResend(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+  };
 
+  // Start timer on mount
+  useEffect(() => {
+    startTimer();
     inputRefs.current[0]?.focus();
-    return () => clearInterval(timer);
+
+    // Cleanup on unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, []);
 
   const handleChange = (index: number, value: string) => {
@@ -65,34 +85,27 @@ const VerifyOtp = () => {
 
   const verifyOtp = async (code: string) => {
     try {
-      // Refresh CSRF cookie
       await api.get("/sanctum/csrf-cookie");
-
       const res = await api.post("/api/verify-otp", { otp: code });
       const { user, token } = res.data;
 
-      // Save Auth Data
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("token", token);
-      
-      // Update Navbar/Global State
       window.dispatchEvent(new Event("userUpdated"));
 
-      toast.success(`Login successful! Welcome back, ${user.name}.`);
+      toast.success(`Login successful! Welcome back, ${user.name || user.email}.`);
 
-      // ─── FIXED REDIRECT LOGIC ───
-      const userType = user.user_type?.toString().toLowerCase().trim();
+      const userType = user.user_type?.toString().toLowerCase().trim() ?? "";
 
       if (userType === "admin") {
         navigate("/dashboard", { replace: true });
       } else if (userType === "mentor") {
         navigate("/mentor/dashboard", { replace: true });
+      } else if (userType === "industry_admin") {
+        navigate("/industry-admin/dashboard", { replace: true });
       } else {
-        // Standard user/student redirect
         navigate("/", { replace: true });
       }
-      // ────────────────────────────
-
     } catch (err: any) {
       const message = err.response?.data?.message || "Invalid or expired code";
       toast.error(message);
@@ -106,9 +119,13 @@ const VerifyOtp = () => {
     try {
       await api.get("/sanctum/csrf-cookie");
       await api.post("/api/resend-otp");
+
       toast.success("New code sent!");
-      setTimeLeft(60);
-      setCanResend(false);
+      
+      // Restart the timer
+      startTimer();
+
+      // Reset OTP inputs
       setOtp(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
     } catch (err: any) {
@@ -120,7 +137,7 @@ const VerifyOtp = () => {
     }
   };
 
-  const seconds = timeLeft % 60;
+  const seconds = timeLeft % 30;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

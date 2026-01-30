@@ -144,6 +144,7 @@ class PaymentController extends Controller
                     'booking'   => 'success',
                     'meetLink'  => $booking->google_meet_link ?? 'pending',
                     'date'      => $booking->scheduled_at?->format('Y-m-d H:i'),
+                    'amount'    => number_format($booking->amount, 2, '.', ''),
                 ]);
 
                 return redirect(config('app.frontend_url') . '/mentorship/booked?' . $query);

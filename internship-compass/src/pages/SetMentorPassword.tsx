@@ -98,7 +98,7 @@ const SetMentorPassword = () => {
         password_confirmation: formData.password_confirmation,
       });
       toast.success("Password set successfully! You can now log in.");
-      navigate("/auth");
+      navigate("/mentor/auth");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to set password");
     } finally {

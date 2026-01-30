@@ -11,9 +11,17 @@
         .header h1 { margin: 0; font-size: 28px; }
         .header p { margin: 8px 0 0; opacity: 0.9; font-size: 16px; }
         .content { padding: 32px 30px; }
-        h2 { color: #1f2937; font-size: 20px; margin: 28px 0 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
-        .info-grid { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; margin-bottom: 16px; }
-        strong { color: #111827; min-width: 140px; display: inline-block; }
+        h2 { color: #1f2937; font-size: 18px; margin: 28px 0 12px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .info-grid { display: table; width: 100%; margin-bottom: 16px; border-spacing: 0 8px; }
+        .info-row { display: table-row; }
+        .info-label { display: table-cell; width: 140px; font-weight: bold; color: #6b7280; font-size: 14px; }
+        .info-value { display: table-cell; color: #111827; font-size: 14px; }
+
+        .topic-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-top: 20px; }
+        .topic-label { color: #4f46e5; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; display: block; }
+        .topic-text { font-style: italic; color: #475569; font-size: 14px; line-height: 1.5; }
+
         .btn { display: inline-block; background: #6366f1; color: white !important; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 24px 0; }
         .footer { background: #f3f4f6; padding: 24px; text-align: center; font-size: 13px; color: #6b7280; border-top: 1px solid #e5e7eb; }
         .highlight { color: #6366f1; font-weight: 600; }
@@ -29,45 +37,86 @@
         <div class="content">
             <h2>Student Information</h2>
             <div class="info-grid">
-                <strong>Name:</strong> <span>{{ $booking->student_name }}</span>
-                <strong>Email:</strong> <span>{{ $booking->student_email }}</span>
-                @if($booking->student_phone) <strong>Phone:</strong> <span>{{ $booking->student_phone }}</span> @endif
-                @if($booking->age) <strong>Age:</strong> <span>{{ $booking->age }} years</span> @endif
-                @if($booking->student_university) <strong>University:</strong> <span class="highlight">{{ $booking->student_university }}</span> @endif
-                @if($booking->student_course) <strong>Programme:</strong> <span class="highlight">{{ $booking->student_course }}</span> @endif
+                <div class="info-row">
+                    <div class="info-label">Name:</div>
+                    <div class="info-value">{{ $booking->student_name }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Email:</div>
+                    <div class="info-value">{{ $booking->student_email }}</div>
+                </div>
+
+                @if($booking->student_phone)
+                <div class="info-row">
+                    <div class="info-label">Phone:</div>
+                    <div class="info-value">{{ $booking->student_phone }}</div>
+                </div>
+                @endif
+
+                <div class="info-row">
+                    <div class="info-label">University:</div>
+                    <div class="info-value highlight">
+                        {{ $booking->student_university ?? $booking->student_institution ?? $booking->university ?? 'N/A' }}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Programme:</div>
+                    <div class="info-value highlight">
+                        {{ $booking->student_course ?? $booking->course ?? 'N/A' }}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">Level:</div>
+                    <div class="info-value">
+                        Year/Level {{ $booking->student_level ?? $booking->level ?? 'N/A' }}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">DOB:</div>
+                    <div class="info-value">
+                        @php
+                            $dob = $booking->date_of_birth ?? $booking->student_dob ?? $booking->dob;
+                        @endphp
+                        {{ $dob ? \Carbon\Carbon::parse($dob)->format('d M Y') : 'N/A' }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="topic-box">
+                <span class="topic-label">Student's Mentorship Topic</span>
+                <p class="topic-text">
+                    "{{ $booking->topic_description ?? $booking->student_topic ?? $booking->topic ?? 'No specific topic provided.' }}"
+                </p>
             </div>
 
             <h2>Session Details</h2>
             <div class="info-grid">
-                <strong>Date & Time:</strong>
-                <span class="highlight">
-                    {{ \Carbon\Carbon::parse($booking->scheduled_at)->format('l, F j, Y \a\t g:i A') }} (GMT)
-                </span>
-                <strong>Amount Paid:</strong> <span>GHS {{ number_format($booking->amount, 2) }}</span>
-                <strong>Booking ID:</strong> <span>#{{ $booking->id }}</span>
+                <div class="info-row">
+                    <div class="info-label">Date & Time:</div>
+                    <div class="info-value highlight">
+                        {{ \Carbon\Carbon::parse($booking->scheduled_at)->format('l, F j, Y \a\t g:i A') }}
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Amount Paid:</div>
+                    <div class="info-value">GHS {{ number_format($booking->amount, 2) }}</div>
+                </div>
             </div>
 
             @if($booking->google_meet_link)
-                <p style="text-align: center; margin: 32px 0;">
+                <div style="text-align: center; margin: 32px 0;">
                     <a href="{{ $booking->google_meet_link }}" class="btn">
-                        → Open Google Meet Session
+                        Join Google Meet Session
                     </a>
-                </p>
-                <p style="margin-top: 24px;">
-                    <strong>Meeting Link (for reference):</strong><br>
-                    <a href="{{ $booking->google_meet_link }}" style="color: #6366f1; word-break: break-all;">
-                        {{ $booking->google_meet_link }}
-                    </a>
-                </p>
+                </div>
             @endif
-
-            <p style="margin-top: 32px; font-size: 15px;">
-                The event has been added to your Google Calendar. Please join 5 minutes early.
-            </p>
         </div>
 
         <div class="footer">
-            <p>© {{ date('Y') }} Your Platform Name. All rights reserved.</p>
+            <p>© {{ date('Y') }} {{ config('app.name') }}. All rights reserved.</p>
         </div>
     </div>
 </body>

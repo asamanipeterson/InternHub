@@ -35,6 +35,7 @@ import MentorDashboard from "./pages/MentorDashboard";
 import SetMentorPassword from "./pages/SetMentorPassword";
 import SetPassword from "./pages/SetPassword";
 import IndustryAdminDashboard from "./pages/IndustryAdminDashboard";
+import AnalyticsPage from "./pages/admin/Analytics";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -93,6 +94,9 @@ const App = () => (
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/auth" element={<Auth />} />
 
+            <Route path="/mentor/auth/" element={<Auth />} />
+           <Route path="/admin/auth/" element={<Auth />} />
+            <Route path="/industryadmin/auth/" element={<Auth />} />
           {/* Protected Admin Dashboard Routes */}
           <Route element={<ProtectedRoute adminOnly={true} />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -101,6 +105,7 @@ const App = () => (
             <Route path="/pending-applications" element={<PendingApplications />} />
             <Route path="/mentors-dashboard" element={<MentorsDashboard />} />
             <Route path="/admin/mentorship-bookings" element={<AdminMentorshipBookings />} />
+            <Route path="/admin/analyticspage" element={<AnalyticsPage/>}/>
           </Route>
 
           {/* Protected Mentor Routes */}

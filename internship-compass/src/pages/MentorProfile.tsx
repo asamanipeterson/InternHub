@@ -5,7 +5,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Calendar, Star, Clock, Award } from "lucide-react";
+import { Calendar, Star, Clock, Award, ArrowLeft } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
 interface Mentor {
   id: string;
   uuid: string;
-  name: string;
   title: string;
   specialization: string | null;
   bio: string | null;
@@ -29,6 +29,12 @@ interface Mentor {
   experience: number;
   rating: number | string;
   session_price: number | string;
+  user: {
+    first_name: string | null;
+    middle_name: string | null;
+    last_name: string | null;
+    email: string;
+  };
 }
 
 const MentorProfile = () => {
@@ -41,13 +47,15 @@ const MentorProfile = () => {
   const [selectedDate, setSelectedDate] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [formData, setFormData] = useState({
-    student_name: "",
+    first_name: "",
+    last_name: "",
     student_email: "",
-    student_phone: "",
-    student_age: "",
-    student_university: "",
+    phone: "",
+    date_of_birth: "",
+    student_institution: "",
     student_course: "",
     student_level: "",
+    topic_description: "",
     scheduled_at: ""
   });
 
@@ -75,13 +83,15 @@ const MentorProfile = () => {
     setSelectedDate("");
     setAvailableTimes([]);
     setFormData({
-      student_name: "",
+      first_name: "",
+      last_name: "",
       student_email: "",
-      student_phone: "",
-      student_age: "",
-      student_university: "",
+      phone: "",
+      date_of_birth: "",
+      student_institution: "",
       student_course: "",
       student_level: "",
+      topic_description: "",
       scheduled_at: ""
     });
     setOpen(true);
@@ -90,12 +100,15 @@ const MentorProfile = () => {
   const handleSubmitBooking = async () => {
     if (!mentor) return;
 
-    if (!formData.student_name ||
-        !formData.student_email ||
-        !formData.student_age ||
-        !formData.student_university ||
-        !formData.student_course ||
-        !formData.student_level ||
+    if (!formData.first_name.trim() ||
+        !formData.last_name.trim() ||
+        !formData.student_email.trim() ||
+        !formData.phone.trim() ||
+        !formData.date_of_birth ||
+        !formData.student_institution.trim() ||
+        !formData.student_course.trim() ||
+        !formData.student_level.trim() ||
+        !formData.topic_description.trim() ||
         !formData.scheduled_at) {
       toast.error("Please fill in all required fields");
       return;
@@ -104,13 +117,15 @@ const MentorProfile = () => {
     try {
       const response = await api.post("/api/mentor/book/initiate", {
         mentor_id: mentor.id,
-        student_name: formData.student_name,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         student_email: formData.student_email,
-        student_phone: formData.student_phone || null,
-        student_age: formData.student_age,
-        student_university: formData.student_university,
+        phone: formData.phone,
+        date_of_birth: formData.date_of_birth,
+        student_institution: formData.student_institution,
         student_course: formData.student_course,
         student_level: formData.student_level,
+        topic_description: formData.topic_description,
         scheduled_at: formData.scheduled_at
       });
 
@@ -121,6 +136,10 @@ const MentorProfile = () => {
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Booking failed. Please try again.");
     }
+  };
+
+  const goBackToMentorship = () => {
+    navigate("/mentorship");
   };
 
   if (loading) {
@@ -135,23 +154,41 @@ const MentorProfile = () => {
     return null;
   }
 
+  const fullName = [
+    mentor.user?.first_name || "",
+    mentor.user?.middle_name || "",
+    mentor.user?.last_name || ""
+  ].filter(Boolean).join(" ") || "Mentor Name";
+
   const safeRating = Number(mentor.rating) || 0;
   const safePrice = Number(mentor.session_price) || 0;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
-      <section className="pt-32 pb-20 gradient-hero relative overflow-hidden">
+      <main className="flex-grow pt-24 pb-12 bg-foreground">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="max-w-5xl mx-auto">
-            <div className="bg-card rounded-3xl shadow-elevated overflow-hidden border border-border">
+            <div className="mb-8">
+              <Button
+                variant="outline"
+                size="lg"
+                className="gap-2 text-lg font-medium border text-background"
+                onClick={goBackToMentorship}
+              >
+                <ArrowLeft className="h-5 w-5" />
+                Back to Mentorship
+              </Button>
+            </div>
+
+            <div className="bg-card rounded-3xl overflow-hidden">
               <div className="md:flex">
                 <div className="md:w-1/3 relative h-96 md:h-auto">
                   {mentor.image ? (
                     <img
                       src={`/${mentor.image}`}
-                      alt={mentor.name}
+                      alt={fullName}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -168,7 +205,7 @@ const MentorProfile = () => {
                 </div>
 
                 <div className="md:w-2/3 p-8 md:p-12">
-                  <h1 className="text-4xl md:text-5xl font-bold mb-4">{mentor.name}</h1>
+                  <h1 className="text-4xl md:text-5xl font-bold mb-4">{fullName}</h1>
                   <p className="text-2xl text-accent mb-6">{mentor.title}</p>
 
                   <div className="flex flex-wrap gap-4 mb-8">
@@ -211,25 +248,39 @@ const MentorProfile = () => {
             </div>
           </div>
         </div>
-      </section>
+      </main>
+
+      <Footer />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Book Session with {mentor.name}</DialogTitle>
+            <DialogTitle>Book Session with {fullName}</DialogTitle>
             <DialogDescription>
               Session fee: <strong>GHS {safePrice.toFixed(2)}</strong>
             </DialogDescription>
           </DialogHeader>
+
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={formData.student_name}
-                onChange={(e) => setFormData({ ...formData, student_name: e.target.value })}
-                placeholder="John Doe"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="first_name">First Name *</Label>
+                <Input
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  placeholder="John"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="last_name">Last Name (Surname) *</Label>
+                <Input
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  placeholder="Doe"
+                />
+              </div>
             </div>
 
             <div className="grid gap-2">
@@ -239,30 +290,38 @@ const MentorProfile = () => {
                 type="email"
                 value={formData.student_email}
                 onChange={(e) => setFormData({ ...formData, student_email: e.target.value })}
-                placeholder="john@example.com"
+                placeholder="john.doe@example.com"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="age">Age *</Label>
+              <Label htmlFor="phone">Phone Number *</Label>
               <Input
-                id="age"
-                type="number"
-                value={formData.student_age}
-                onChange={(e) => setFormData({ ...formData, student_age: e.target.value })}
-                placeholder="22"
-                min="13"
-                max="120"
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+233 24 123 4567"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="university">University *</Label>
+              <Label htmlFor="date_of_birth">Date of Birth *</Label>
               <Input
-                id="university"
-                value={formData.student_university}
-                onChange={(e) => setFormData({ ...formData, student_university: e.target.value })}
-                placeholder="University of Ghana"
+                id="date_of_birth"
+                type="date"
+                value={formData.date_of_birth}
+                max={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="institution">Institution *</Label>
+              <Input
+                id="institution"
+                value={formData.student_institution}
+                onChange={(e) => setFormData({ ...formData, student_institution: e.target.value })}
+                placeholder="University of Ghana / Ashesi University"
               />
             </div>
 
@@ -272,7 +331,7 @@ const MentorProfile = () => {
                 id="course"
                 value={formData.student_course}
                 onChange={(e) => setFormData({ ...formData, student_course: e.target.value })}
-                placeholder="Computer Science"
+                placeholder="BSc Computer Science"
               />
             </div>
 
@@ -282,17 +341,18 @@ const MentorProfile = () => {
                 id="level"
                 value={formData.student_level}
                 onChange={(e) => setFormData({ ...formData, student_level: e.target.value })}
-                placeholder="Level 400 / Final Year"
+                placeholder="Level 300 / 3rd Year"
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="phone">Phone (optional)</Label>
-              <Input
-                id="phone"
-                value={formData.student_phone}
-                onChange={(e) => setFormData({ ...formData, student_phone: e.target.value })}
-                placeholder="+233 123 456 789"
+              <Label htmlFor="topic_description">What would you like to discuss? *</Label>
+              <Textarea
+                id="topic_description"
+                value={formData.topic_description}
+                onChange={(e) => setFormData({ ...formData, topic_description: e.target.value })}
+                placeholder="e.g. Career transition advice, resume & LinkedIn optimization, interview preparation for product management roles, salary negotiation strategies..."
+                className="min-h-[100px]"
               />
             </div>
 
@@ -300,7 +360,7 @@ const MentorProfile = () => {
               <Label>Preferred Date *</Label>
               <Input
                 type="date"
-                min={new Date().toISOString().split('T')[0]}
+                min={new Date().toISOString().split("T")[0]}
                 value={selectedDate}
                 onChange={async (e) => {
                   const date = e.target.value;
@@ -309,7 +369,7 @@ const MentorProfile = () => {
                   if (date) {
                     try {
                       const res = await api.get(`/api/mentors/${mentor.uuid}/available-slots?date=${date}`);
-                      setAvailableTimes(res.data);
+                      setAvailableTimes(res.data || []);
                     } catch {
                       setAvailableTimes([]);
                       toast.error("Could not load available times");
@@ -321,29 +381,30 @@ const MentorProfile = () => {
 
             {selectedDate && (
               <div className="grid gap-2">
-                <Label>Available Time *</Label>
+                <Label>Available Time Slots *</Label>
                 {availableTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                     {availableTimes.map(time => (
                       <Button
                         key={time}
-                        variant={formData.scheduled_at === `${selectedDate}T${time}:00` ? "default" : "outline"}
+                        variant={formData.scheduled_at === `${selectedDate}T${time}` ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}:00` })}
+                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}` })}
                       >
                         {time}
                       </Button>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center">
+                  <p className="text-sm text-muted-foreground text-center py-2">
                     No available time slots on this date
                   </p>
                 )}
               </div>
             )}
           </div>
-          <div className="flex justify-end gap-3">
+
+          <div className="flex justify-end gap-3 mt-6">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -357,8 +418,6 @@ const MentorProfile = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Footer />
     </div>
   );
 };

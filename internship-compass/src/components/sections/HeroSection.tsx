@@ -1,38 +1,36 @@
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { ArrowRight, Briefcase, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.jpg";
 
-// This replaces the missing useCountUp hook while maintaining your exact design
 const CountUpStat = ({ end, suffix, label }: { end: number; suffix: string; label: string }) => {
   const countValue = useMotionValue(0);
   const rounded = useTransform(countValue, (latest) => Math.round(latest).toLocaleString());
-  const ref = useRef(null);
 
   useEffect(() => {
     const controls = animate(countValue, end, {
-      duration: 2.5, // Matches your 2500ms duration
+      duration: 2.5,
       ease: "easeOut",
-      delay: 1, // Delays start to match the stats entrance animation
+      delay: 1,
     });
     return controls.stop;
   }, [countValue, end]);
 
   return (
-    <div ref={ref} className="text-center lg:text-left">
-      <div className="text-3xl lg:text-4xl font-bold text-accent">
+    <div className="text-center lg:text-left">
+      <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-accent">
         <motion.span>{rounded}</motion.span>{suffix}
       </div>
-      <div className="text-primary-foreground/70 text-sm">{label}</div>
+      <div className="text-primary-foreground/70 text-xs md:text-sm">{label}</div>
     </div>
   );
 };
 
 export const HeroSection = () => {
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center overflow-hidden py-16 lg:py-0">
       {/* Background Image */}
       <div className="absolute inset-0">
         <img 
@@ -43,37 +41,24 @@ export const HeroSection = () => {
         <div className="absolute inset-0 bg-primary/85" />
       </div>
 
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Animated background blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
-          className="absolute top-20 right-[10%] w-72 h-72 rounded-full bg-accent/10 blur-3xl"
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 8,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          className="absolute top-20 right-[10%] w-64 h-64 rounded-full bg-accent/10 blur-3xl"
+          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute bottom-20 left-[5%] w-96 h-96 rounded-full bg-accent/5 blur-3xl"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            opacity: [0.2, 0.4, 0.2],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          className="absolute bottom-20 left-[5%] w-80 h-80 rounded-full bg-accent/5 blur-3xl"
+          animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
-      <div className="container mx-auto px-4 lg:px-8 pt-20 lg:pt-0 relative z-10">
+      <div className="container mx-auto px-4 lg:px-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Left Content */}
+          
+          {/* Left Content (Title, Buttons, and Stats) */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -90,7 +75,7 @@ export const HeroSection = () => {
               <span className="text-sm font-medium">Start Your Career Journey</span>
             </motion.div>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground leading-tight mb-6">
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-primary-foreground leading-tight mb-6">
               Connect with{" "}
               <span className="relative inline-block">
                 <span className="text-accent">Industry Leaders</span>
@@ -105,30 +90,30 @@ export const HeroSection = () => {
               & Launch Your Career
             </h1>
 
-            <p className="text-lg lg:text-xl text-primary-foreground/80 mb-8 max-w-xl mx-auto lg:mx-0">
-              Discover exclusive internship opportunities and get personalized mentorship from expert mentors to shape your professional future.
+            <p className="text-base md:text-lg lg:text-xl text-primary-foreground/80 mb-8 max-w-xl mx-auto lg:mx-0">
+              Discover exclusive internship opportunities and  get one-on-one sessions with experienced mentors who will  help you navigate your career path.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
               <Link to="/internships">
-                <Button variant="hero" size="xl">
+                <Button variant="hero" size="xl" className="w-full sm:w-auto">
                   Browse Internships
                   <ArrowRight className="ml-2" />
                 </Button>
               </Link>
               <Link to="/mentorship">
-                <Button variant="hero-outline" size="xl">
-                  Book Mentorship
+                <Button variant="hero-outline" size="xl" className="w-full sm:w-auto">
+                  Career Mentorship
                 </Button>
               </Link>
             </div>
 
-            {/* Stats */}
+            {/* Stats - Stays above the visual on mobile */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8 }}
-              className="flex flex-wrap justify-center lg:justify-start gap-8 mt-12 pt-8 border-t border-primary-foreground/20"
+              className="flex flex-wrap justify-center lg:justify-start gap-6 md:gap-8 mt-12 pt-8 border-t border-primary-foreground/20"
             >
               <CountUpStat end={500} suffix="+" label="Internships" />
               <CountUpStat end={50} suffix="+" label="Companies" />
@@ -136,84 +121,82 @@ export const HeroSection = () => {
             </motion.div>
           </motion.div>
 
-          {/* Right Visual */}
+          {/* Right Visual - Now appears AFTER stats on mobile */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="relative hidden lg:block"
+            className="relative mt-16 lg:mt-0"
           >
-            <div className="relative w-full aspect-square max-w-lg mx-auto">
-              {/* Central circle */}
+            <div className="relative w-full aspect-square max-w-[280px] sm:max-w-[350px] md:max-w-md lg:max-w-lg mx-auto">
+              
+              {/* Central spinning circle - Original Color Maintained */}
               <motion.div
-                className="absolute inset-12 rounded-full bg-gradient-to-br from-accent/30 to-accent/10 backdrop-blur-sm"
+                className="absolute inset-10 md:inset-12 rounded-full bg-gradient-to-br from-accent/40 to-accent/10 backdrop-blur-sm border border-accent/30 shadow-[0_0_40px_rgba(var(--accent),0.2)]"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
               />
 
-              {/* Floating cards */}
+              {/* Floating Glassy Cards */}
               <motion.div
-                className="absolute top-8 left-0 bg-background/95 backdrop-blur-lg rounded-2xl p-4 shadow-elevated"
-                animate={{ y: [0, -10, 0] }}
+                className="absolute top-0 left-[-8%] z-20 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-3 md:p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
+                animate={{ y: [0, -12, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">
-                    <Briefcase className="w-6 h-6 text-accent" />
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-accent/30 flex items-center justify-center border border-white/10">
+                    <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-accent" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-foreground">Tech Internships</div>
-                    <div className="text-sm text-muted-foreground">120+ Positions</div>
+                  <div className="pr-2">
+                    <div className="font-semibold text-white text-xs md:text-base">Tech Internships</div>
+                    <div className="text-[10px] md:text-xs text-white/70">120+ Positions</div>
                   </div>
                 </div>
               </motion.div>
 
               <motion.div
-                className="absolute top-1/3 right-0 bg-background/95 backdrop-blur-lg rounded-2xl p-4 shadow-elevated"
-                animate={{ y: [0, 10, 0] }}
+                className="absolute top-1/4 right-[-8%] z-20 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-3 md:p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
+                animate={{ y: [0, 12, 0] }}
                 transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                    <GraduationCap className="w-6 h-6 text-primary" />
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-primary/40 flex items-center justify-center border border-white/10">
+                    <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-white" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-foreground">Career Guidance</div>
-                    <div className="text-sm text-muted-foreground">Expert Mentors</div>
+                  <div className="pr-2">
+                    <div className="font-semibold text-white text-xs md:text-base">Career Guidance</div>
+                    <div className="text-[10px] md:text-xs text-white/70">Expert Mentors</div>
                   </div>
                 </div>
               </motion.div>
 
               <motion.div
-                className="absolute bottom-16 left-8 bg-background/95 backdrop-blur-lg rounded-2xl p-4 shadow-elevated"
-                animate={{ y: [0, -8, 0] }}
+                className="absolute bottom-10 left-[2%] z-20 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-3 md:p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
+                animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-accent" />
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-accent/30 flex items-center justify-center border border-white/10">
+                    <Users className="w-5 h-5 md:w-6 md:h-6 text-accent" />
                   </div>
-                  <div>
-                    <div className="font-semibold text-foreground">Join 10K+ Students</div>
-                    <div className="text-sm text-muted-foreground">Growing Community</div>
+                  <div className="pr-2">
+                    <div className="font-semibold text-white text-xs md:text-base">Join 10K+ Students</div>
+                    <div className="text-[10px] md:text-xs text-white/70">Growing Community</div>
                   </div>
                 </div>
               </motion.div>
 
               {/* Decorative dots */}
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 pointer-events-none">
                 {[...Array(6)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-3 h-3 rounded-full bg-accent/40"
+                    className="absolute w-2 h-2 md:w-3 md:h-3 rounded-full bg-accent/40"
                     style={{
                       top: `${20 + Math.random() * 60}%`,
                       left: `${20 + Math.random() * 60}%`,
                     }}
-                    animate={{
-                      scale: [1, 1.5, 1],
-                      opacity: [0.4, 0.8, 0.4],
-                    }}
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0.8, 0.4] }}
                     transition={{
                       duration: 3 + Math.random() * 2,
                       repeat: Infinity,
@@ -224,11 +207,12 @@ export const HeroSection = () => {
               </div>
             </div>
           </motion.div>
+
         </div>
       </div>
 
       {/* Bottom wave */}
-      <div className="absolute bottom-0 left-0 right-0">
+      <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
         <svg
           viewBox="0 0 1440 120"
           fill="none"

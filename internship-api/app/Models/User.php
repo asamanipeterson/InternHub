@@ -14,7 +14,15 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
+        'first_name',
+        'middle_name',
+        'last_name',
         'name',
         'email',
         'password',
@@ -23,27 +31,89 @@ class User extends Authenticatable
         'year',
         'phone',
         'nationality',
+        'gender',
+        'date_of_birth',
         'user_type',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password'          => 'hashed',
+            'date_of_birth'     => 'date',   // optional but recommended
         ];
     }
 
+    /**
+     * Relationships
+     */
     public function mentor()
     {
         return $this->hasOne(Mentor::class);
     }
 
+    public function oneTimePassword()
+    {
+        return $this->hasOne(OneTimePassCode::class);
+    }
+
+    public function adminIndustries()
+    {
+        return $this->hasMany(AdminIndustry::class);
+    }
+
+    /**
+     * Attribute Accessors / Mutators
+     */
+    public function getFullNameAttribute(): string
+    {
+        $parts = array_filter([
+            $this->first_name,
+            $this->middle_name,
+            $this->last_name,
+        ]);
+
+        return implode(' ', $parts) ?: $this->email; // fallback to email if name is empty
+    }
+
+    /**
+     * Helper Methods
+     */
+    public function generateOtp()
+    {
+        $otpCode = rand(100000, 999999);
+
+        $this->oneTimePassword()->delete();
+
+        $this->oneTimePassword()->create([
+            'code'       => $otpCode,
+            'expires_at' => Carbon::now()->addMinutes(5),
+        ]);
+
+        // Mail::to($this->email)->send(new OtpMail($otpCode));
+
+        return $otpCode;
+    }
+
+    /**
+     * Role / Type Checks
+     */
     public function isAdmin(): bool
     {
         return $this->user_type === 'admin';
@@ -59,43 +129,11 @@ class User extends Authenticatable
         return $this->user_type === 'user';
     }
 
-    public function oneTimePassword()
-    {
-        return $this->hasOne(OneTimePassCode::class);
-    }
-
-    public function generateOtp()
-    {
-        $otpCode = rand(100000, 999999);
-
-        $this->oneTimePassword()->delete();
-
-        $this->oneTimePassword()->create([
-            'code' => $otpCode,
-            'expires_at' => Carbon::now()->addMinutes(5),
-        ]);
-
-        // Mail::to($this->email)->send(new OtpMail($otpCode));
-
-        return $otpCode;
-    }
-
-    public function adminIndustries()
-    {
-        return $this->hasMany(AdminIndustry::class);
-    }
-
-    /**
-     * Check if this is a super admin (full access)
-     */
     public function isSuperAdmin(): bool
     {
         return $this->user_type === 'admin';
     }
 
-    /**
-     * Check if this is an industry-specific admin
-     */
     public function isIndustryAdmin(): bool
     {
         return $this->user_type === 'industry_admin';

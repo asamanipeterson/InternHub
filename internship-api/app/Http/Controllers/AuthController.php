@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\OtpMail;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Mail\WelcomeEmail;
 use Illuminate\Support\Facades\Cache;
 
 class AuthController extends Controller
@@ -19,17 +20,24 @@ class AuthController extends Controller
     /**
      * Register a new user (student)
      */
+    /**
+     * Register a new user (student)
+     */
     public function register(Request $request)
     {
         $validated = $request->validate([
-            'name'          => ['required', 'string', 'max:255'],
-            'university'    => ['required', 'string', 'max:255'],
-            'course'        => ['required', 'string', 'max:255'],
-            'year'          => ['required', 'string', 'max:100'],
-            'email'         => ['required', 'email', 'max:255', 'unique:users'],
-            'phone'         => ['required', 'string', 'max:20'],
-            'nationality'   => ['required', 'string', 'max:100'],
-            'password'      => [
+            'first_name'         => ['required', 'string', 'max:100'],
+            'middle_name'        => ['nullable', 'string', 'max:100'],
+            'last_name'          => ['required', 'string', 'max:100'],
+            'university'         => ['required', 'string', 'max:255'],
+            'course'             => ['required', 'string', 'max:255'],
+            'year'               => ['required', 'string', 'max:100'],
+            'phone'              => ['required', 'string', 'max:20'],
+            'nationality'        => ['required', 'string', 'max:100'],
+            'gender'             => ['required', 'in:Male,Female,Non-binary,Other,Prefer not to say'],
+            'date_of_birth'      => ['required', 'date', 'before:-15 years'],
+            'email'              => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password'           => [
                 'required',
                 'confirmed',
                 'min:8',
@@ -40,17 +48,28 @@ class AuthController extends Controller
             ],
         ]);
 
+        // Logic to combine name
+        $fullName = trim($validated['first_name'] . ' ' . ($validated['middle_name'] ?? '') . ' ' . $validated['last_name']);
+        $fullName = str_replace('  ', ' ', $fullName);
+
         $user = User::create([
-            'name'          => $validated['name'],
-            'university'    => $validated['university'],
-            'course'        => $validated['course'],
-            'year'          => $validated['year'],
-            'email'         => $validated['email'],
-            'phone'         => $validated['phone'],
-            'nationality'   => $validated['nationality'],
-            'password'      => Hash::make($validated['password']),
-            'user_type'     => 'user', // default to student
+            'name'               => $fullName, // Combined Name
+            'first_name'         => $validated['first_name'],
+            'middle_name'        => $validated['middle_name'] ?? null,
+            'last_name'          => $validated['last_name'],
+            'university'         => $validated['university'],
+            'course'             => $validated['course'],
+            'year'               => $validated['year'],
+            'phone'              => $validated['phone'],
+            'nationality'        => $validated['nationality'],
+            'gender'             => $validated['gender'],
+            'date_of_birth'      => $validated['date_of_birth'],
+            'email'              => $validated['email'],
+            'password'           => Hash::make($validated['password']),
+            'user_type'          => 'user',
         ]);
+
+        Mail::to($user->email)->queue(new WelcomeEmail($user));
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -58,6 +77,9 @@ class AuthController extends Controller
             'user' => $user->only([
                 'id',
                 'name',
+                'first_name',
+                'middle_name',
+                'last_name',
                 'email',
                 'user_type',
                 'university',
@@ -65,6 +87,8 @@ class AuthController extends Controller
                 'year',
                 'phone',
                 'nationality',
+                'gender',
+                'date_of_birth'
             ]),
             'token' => $token,
         ], 201);
@@ -88,7 +112,6 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        // Generate and store OTP (expires in 60 seconds)
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
         OneTimePassCode::updateOrCreate(
@@ -99,14 +122,12 @@ class AuthController extends Controller
             ]
         );
 
-        // Send email
         Mail::to($user->email)->queue(new OtpMail($code));
 
-        // Store user ID in session for verification step
         session(['otp_user_id' => $user->id]);
 
         return response()->json([
-            'message' => 'A 6-digit verification code has been sent to your email.',
+            'message'  => 'A 6-digit verification code has been sent to your email.',
             'redirect' => '/verify-otp'
         ]);
     }
@@ -141,28 +162,28 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid or expired code'], 422);
         }
 
-        // Success → login the user
         Auth::login($user);
 
-        // Cleanup OTP record and session
         $otpRecord->delete();
         $request->session()->forget('otp_user_id');
 
-        // Create Sanctum token
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Explicitly return user with user_type so frontend can redirect correctly
         return response()->json([
             'user' => $user->only([
                 'id',
-                'name',
+                'first_name',
+                'middle_name',
+                'last_name',
                 'email',
-                'user_type',               // ← Critical fix: now included
+                'user_type',
                 'university',
                 'course',
                 'year',
                 'phone',
                 'nationality',
+                'gender',
+                'date_of_birth'
             ]),
             'token'   => $token,
             'message' => 'Verification successful'
@@ -170,7 +191,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Resend OTP
+     * Resend OTP (for login flow)
      */
     public function resendOtp(Request $request)
     {
@@ -186,7 +207,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
-        // Generate new OTP
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
         OneTimePassCode::updateOrCreate(
@@ -215,7 +235,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Get authenticated user (for /api/user endpoint)
+     * Get authenticated user
      */
     public function user(Request $request)
     {
@@ -223,7 +243,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Forgot Password → send OTP
+     * Forgot Password → send OTP (secure – same message always)
      */
     public function forgotPassword(Request $request)
     {
@@ -232,10 +252,13 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            // Security: Don't reveal if email exists
-            return response()->json(['message' => 'If this email is registered, a code has been sent.']);
+            // Direct message you want
+            return response()->json([
+                'message' => 'This email is not registered in our system. Please sign up first before you can reset your password.'
+            ], 404);  // or 422 – using error status helps frontend distinguish
         }
 
+        // ── Exists ── proceed normally
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
         OneTimePassCode::updateOrCreate(
@@ -248,24 +271,26 @@ class AuthController extends Controller
 
         Mail::to($user->email)->queue(new OtpMail($code));
 
-        return response()->json(['message' => 'Verification code sent.']);
+        return response()->json([
+            'message' => 'A 6-digit reset code has been sent to your email.'
+        ]);
     }
-
     /**
      * Reset Password using OTP
      */
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'email'    => 'required|email',
-            'otp'      => 'required|string|size:6',
-            'password' => 'required|confirmed|min:8',
+            'email'               => 'required|email',
+            'otp'                 => 'required|string|size:6',
+            'password'            => 'required|confirmed|min:8',
+            'password_confirmation' => 'required',
         ]);
 
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            return response()->json(['message' => 'Invalid request.'], 404);
+            return response()->json(['message' => 'Invalid request.'], 422);
         }
 
         $otpRecord = OneTimePassCode::where('user_id', $user->id)
@@ -282,18 +307,20 @@ class AuthController extends Controller
 
         $otpRecord->delete();
 
-        return response()->json(['message' => 'Password has been updated.']);
+        return response()->json(['message' => 'Password has been updated successfully.']);
     }
 
+    // ───────────────────────────────────────────────
+    // Optional / legacy methods (you can keep or remove)
+    // ───────────────────────────────────────────────
 
     public function verifySetPasswordOtp(Request $request)
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
-            'otp' => 'required|digits:6',
+            'otp'     => 'required|digits:6',
         ]);
 
-        // Check the database instead of Cache
         $otpRecord = OneTimePassCode::where('user_id', $request->user_id)
             ->where('code', $request->otp)
             ->where('expires_at', '>', Carbon::now())
@@ -309,13 +336,13 @@ class AuthController extends Controller
     public function setPasswordAndLogin(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'password' => 'required|min:8|confirmed',
+            'user_id'              => 'required|exists:users,id',
+            'password'             => 'required|min:8|confirmed',
+            'password_confirmation' => 'required',
         ]);
 
         $user = User::findOrFail($request->user_id);
 
-        // Check if password is already set (prevent reset abuse)
         if ($user->password) {
             return response()->json(['message' => 'Password already set'], 403);
         }
@@ -324,13 +351,12 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        // Login the user
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Password set successfully',
-            'user' => $user,
-            'token' => $token,
+            'user'    => $user,
+            'token'   => $token,
         ]);
     }
 }

@@ -19,7 +19,7 @@ const features = [
   {
     icon: Calendar,
     title: "Easy Booking",
-    description: "Schedule counselling sessions and apply for internships with our streamlined booking system.",
+    description: "Schedule Mentorships sessions and apply for internships with our streamlined booking system.",
     color: "accent",
   },
   {
@@ -111,8 +111,8 @@ export const FeaturesSection = () => {
         </motion.div>
 
         {/* CTA Cards */}
-        <div className="grid md:grid-cols-2 gap-6 lg:gap-8 mt-16">
-          {/* Internships CTA */}
+        {/* <div className="grid md:grid-cols-2 gap-6 lg:gap-8 mt-16">
+         
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -141,7 +141,7 @@ export const FeaturesSection = () => {
             <div className="absolute -right-10 -bottom-10 w-48 h-48 rounded-full bg-accent/20 blur-3xl" />
           </motion.div>
 
-          {/* Counselling CTA */}
+    
           <motion.div
             initial={{ opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -169,7 +169,7 @@ export const FeaturesSection = () => {
             </div>
             <div className="absolute -right-10 -bottom-10 w-48 h-48 rounded-full bg-primary/10 blur-3xl" />
           </motion.div>
-        </div>
+        </div> */}
       </div>
     </section>
   );

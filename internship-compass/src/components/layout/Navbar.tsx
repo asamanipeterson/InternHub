@@ -13,8 +13,8 @@ import auth from "@/lib/auth";
 
 const navLinks = [
   { label: "Home", href: "/" },
-  { label: "Internships", href: "/internships" },
-  { label: "Mentorship", href: "/mentorship" },
+  { label: "Interview Prep", href: "/interview-prep" },
+  { label: "Career Tips", href: "/career-tips" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -25,48 +25,57 @@ export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const loadUser = () => {
-    try {
-      const stored = localStorage.getItem("user");
-      if (!stored || stored === "null" || stored === "undefined") {
-        setUser(null);
-      } else {
-        const parsed = JSON.parse(stored);
-        setUser(parsed);
-      }
-    } catch (error) {
-      localStorage.removeItem("user");
-      setUser(null);
-    }
-  };
-
+  // Scroll detection
   useEffect(() => {
-    loadUser();
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 80);
+    };
+    window.addEventListener("scroll", handleScroll);
+    handleScroll(); 
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-    const handleUpdate = () => loadUser();
-    window.addEventListener("userUpdated", handleUpdate);
+  // User loading & dropdown outside click
+  useEffect(() => {
+    const loadUser = () => {
+      try {
+        const stored = localStorage.getItem("user");
+        if (!stored || stored === "null" || stored === "undefined") {
+          setUser(null);
+        } else {
+          const parsed = JSON.parse(stored);
+          setUser(parsed);
+        }
+      } catch (error) {
+        localStorage.removeItem("user");
+        setUser(null);
+      }
+    };
+
+    loadUser();
+    window.addEventListener("userUpdated", loadUser);
 
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      window.removeEventListener("userUpdated", handleUpdate);
+      window.removeEventListener("userUpdated", loadUser);
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
-  // Fetch real notification count
+  // Notifications
   useEffect(() => {
     if (!user) {
       setNotificationCount(0);
@@ -79,14 +88,11 @@ export const Navbar = () => {
         setNotificationCount(res.data.unread || 0);
       } catch (err: any) {
         console.error("Failed to fetch notifications:", err);
-        // Optional: toast.error("Couldn't load notifications");
       }
     };
 
     fetchNotifications();
-
     const interval = setInterval(fetchNotifications, REFRESH_INTERVAL);
-
     return () => clearInterval(interval);
   }, [user]);
 
@@ -94,16 +100,22 @@ export const Navbar = () => {
   const isAdmin = userType === "admin";
   const isMentor = userType === "mentor";
   const isIndustryAdmin = userType === "industry_admin";
-  const isStudent = userType === "student" || userType === "user";
   const isLoggedIn = !!user;
-  const isOnAuthPage = location.pathname === "/auth";
+  
+  // Logic to determine if user is a specialized role
+  const isSpecialRole = isAdmin || isMentor || isIndustryAdmin;
 
   const handleLogout = async () => {
-    await auth.logout();
-    setUser(null);
-    setIsOpen(false);
-    setIsDropdownOpen(false);
-    navigate("/auth");
+    try {
+      const redirectPath = await auth.logout();
+      setUser(null);
+      setIsOpen(false);
+      setIsDropdownOpen(false);
+      navigate(redirectPath);
+    } catch (err) {
+      console.error("Logout failed", err);
+      navigate("/auth");
+    }
   };
 
   const isActive = (href: string) => {
@@ -111,156 +123,154 @@ export const Navbar = () => {
     return location.pathname.startsWith(href);
   };
 
-  const userName = user?.name || user?.email?.split('@')[0] || "User";
-  const userRoleDisplay = isAdmin
-    ? "Administrator"
-    : isMentor
-    ? "Mentor"
-    : isIndustryAdmin
-    ? "Industry Admin"
-    : "Student";
+  const userName = user?.first_name || user?.email?.split('@')[0] || "User";
+  const userRoleDisplay = isAdmin ? "Administrator" : isMentor ? "Mentor" : isIndustryAdmin ? "Industry Admin" : "Student";
+
+  const isDarkSection = !isScrolled;
+
+  // ─── Role-Based Link Logic ───
+  const getDashboardLink = () => {
+    if (isAdmin) return { label: "Admin Dashboard", href: "/dashboard" };
+    if (isMentor) return { label: "Mentor Dashboard", href: "/mentor/dashboard" };
+    if (isIndustryAdmin) return { label: "Industry Dashboard", href: "/industry-admin/dashboard" };
+    return null;
+  };
+
+  const dashboardLink = getDashboardLink();
 
   return (
     <motion.nav
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="fixed top-0 left-0 right-0 z-50 glass"
+      className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        isDarkSection
+          ? "bg-transparent py-4"
+          : "bg-white/80 backdrop-blur-xl border-b border-gray-200 py-2 shadow-sm"
+      )}
     >
       <div className="container mx-auto px-4 lg:px-8">
-        <div className="flex items-center justify-between h-16 lg:h-20">
+        <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center">
-            <img src={logo} alt="Student Industry Connect" className="h-10 lg:h-12 w-auto" />
+            <img
+              src={logo}
+              alt="Logo"
+              className={cn(
+                "h-10 lg:h-12 w-auto transition-all duration-300",
+                isDarkSection ? "brightness-0 invert scale-[1.03]" : "brightness-100"
+              )}
+            />
           </Link>
 
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-2">
-            {navLinks.map((link) => (
+            {isSpecialRole && dashboardLink ? (
+              // Show ONLY Dashboard link for special roles
               <Link
-                key={link.label}
-                to={link.href}
+                to={dashboardLink.href}
                 className={cn(
-                  "px-4 py-2 rounded-lg font-medium transition-all duration-300",
-                  isActive(link.href)
-                    ? "bg-accent text-accent-foreground"
-                    : "text-foreground/80 hover:text-foreground hover:bg-primary/10"
+                  "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300",
+                  isActive(dashboardLink.href)
+                    ? "bg-[#ff5722] text-white shadow-md"
+                    : isDarkSection ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"
                 )}
               >
-                {link.label}
+                {dashboardLink.label}
               </Link>
-            ))}
+            ) : (
+              // Show standard links for normal users/guests
+              navLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className={cn(
+                    "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300",
+                    isActive(link.href)
+                      ? "bg-[#ff5722] text-white shadow-md"
+                      : isDarkSection ? "text-white/90 hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"
+                  )}
+                >
+                  {link.label}
+                </Link>
+              ))
+            )}
           </div>
 
           {/* Desktop Right Side */}
           <div className="hidden lg:flex items-center gap-5">
-            {!isLoggedIn && !isOnAuthPage && (
-              <Link to="/auth">
-                <Button variant="accent">Register</Button>
-              </Link>
-            )}
-
-            {isLoggedIn && (
-              <>
-                {/* Notification Bell */}
+            {isLoggedIn ? (
+              <div className="flex items-center gap-4">
                 <button
-                  className="relative p-2 rounded-full hover:bg-secondary/70 transition-colors"
-                  onClick={() => {
-                    toast.info("Notifications panel coming soon!");
-                    // Later: navigate("/notifications") or open dropdown
-                  }}
+                  className={cn(
+                    "relative p-2 transition-colors rounded-full",
+                    isDarkSection ? "hover:bg-white/10 text-white" : "hover:bg-black/5 text-gray-700"
+                  )}
+                  onClick={() => toast.info("Notifications coming soon!")}
                 >
-                  <Bell className="h-6 w-6 text-foreground" />
+                  <Bell className="h-5 w-5" />
                   {notificationCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 shadow-sm">
-                      {notificationCount > 99 ? '99+' : notificationCount}
+                    <span className="absolute top-1 right-1 bg-[#ff5722] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {notificationCount}
                     </span>
                   )}
                 </button>
 
-                {/* User Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary/80 transition-colors"
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg transition-colors",
+                      isDarkSection ? "hover:bg-white/10 text-white" : "hover:bg-black/5 text-gray-800"
+                    )}
                   >
-                    <UserCircle className="h-8 w-8 text-primary" />
+                    <UserCircle className={cn("h-6 w-6", isDarkSection ? "text-white/90" : "text-gray-600")} />
                     <span className="font-medium text-sm hidden md:block">{userName}</span>
-                    <ChevronDown
-                      className={cn("h-4 w-4 transition-transform", isDropdownOpen ? "rotate-180" : "")}
-                    />
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", isDropdownOpen ? "rotate-180" : "")} />
                   </button>
 
                   <AnimatePresence>
                     {isDropdownOpen && (
                       <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute right-0 mt-3 w-64 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className={cn(
+                          "absolute right-0 mt-3 w-64 rounded-xl shadow-2xl overflow-hidden z-50",
+                          isDarkSection ? "bg-black/80 backdrop-blur-xl border border-white/10 text-white" : "bg-white border border-gray-200 text-gray-800"
+                        )}
                       >
                         <div className="py-2">
-                          <div className="px-4 py-3 border-b border-border">
-                            <p className="font-medium">{userName}</p>
-                            <p className="text-xs text-muted-foreground">{userRoleDisplay}</p>
+                          <div className={cn("px-4 py-3 border-b", isDarkSection ? "border-white/10" : "border-gray-100")}>
+                            <p className="font-semibold">{userName}</p>
+                            <p className={cn("text-xs", isDarkSection ? "text-white/70" : "text-gray-500")}>{userRoleDisplay}</p>
                           </div>
-
-                          {isAdmin && (
-                            <Link
-                              to="/dashboard"
-                              className="flex items-center px-4 py-3 hover:bg-secondary transition-colors"
-                              onClick={() => setIsDropdownOpen(false)}
-                            >
-                              <Shield className="h-5 w-5 mr-3 text-primary" />
-                              <span>Admin Dashboard</span>
-                            </Link>
-                          )}
-
-                          {isIndustryAdmin && (
-                            <Link
-                              to="/industry-admin/dashboard"
-                              className="flex items-center px-4 py-3 hover:bg-secondary transition-colors"
-                              onClick={() => setIsDropdownOpen(false)}
-                            >
-                              <Shield className="h-5 w-5 mr-3 text-primary" />
-                              <span>Industry Admin</span>
-                            </Link>
-                          )}
-
-                          {isMentor && (
-                            <Link
-                              to="/mentor/dashboard"
-                              className="flex items-center px-4 py-3 hover:bg-secondary transition-colors"
-                              onClick={() => setIsDropdownOpen(false)}
-                            >
-                              <Shield className="h-5 w-5 mr-3 text-primary" />
-                              <span>Mentor Dashboard</span>
-                            </Link>
-                          )}
-
                           <button
-                            onClick={() => {
-                              handleLogout();
-                              setIsDropdownOpen(false);
-                            }}
-                            className="w-full flex items-center px-4 py-3 hover:bg-destructive/10 transition-colors text-destructive"
+                            onClick={handleLogout}
+                            className={cn(
+                              "w-full flex items-center px-4 py-3 transition-colors text-left text-sm",
+                              isDarkSection ? "hover:bg-red-900/30 text-red-300" : "hover:bg-red-50 text-red-600"
+                            )}
                           >
-                            <LogOut className="h-5 w-5 mr-3" />
-                            <span>Logout</span>
+                            <LogOut className="h-4 w-4 mr-3" />
+                            Logout
                           </button>
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
-              </>
+              </div>
+            ) : (
+              <Link to="/auth">
+                <Button variant="accent">Register</Button>
+              </Link>
             )}
           </div>
 
-          {/* Mobile Menu Toggle */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden p-2 text-foreground hover:bg-secondary rounded-lg transition-colors"
+            className={cn("lg:hidden p-2 rounded-lg", isDarkSection ? "text-white" : "text-gray-800")}
           >
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -274,105 +284,36 @@ export const Navbar = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="lg:hidden glass border-t border-border"
+            className={cn("lg:hidden border-t", isDarkSection ? "bg-black/90 border-white/10" : "bg-white border-gray-200")}
           >
             <div className="container mx-auto px-4 py-6 space-y-4">
-              {navLinks.map((link, index) => (
-                <motion.div
-                  key={link.label}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
+              {/* Conditional Mobile Links */}
+              {isSpecialRole && dashboardLink ? (
+                <Link
+                  to={dashboardLink.href}
+                  className={cn("block py-3 px-4 rounded-lg font-medium", isActive(dashboardLink.href) ? "bg-[#ff5722] text-white" : "text-gray-400")}
+                  onClick={() => setIsOpen(false)}
                 >
+                  {dashboardLink.label}
+                </Link>
+              ) : (
+                navLinks.map((link) => (
                   <Link
+                    key={link.label}
                     to={link.href}
-                    className={cn(
-                      "block font-medium py-3 px-4 rounded-lg transition-all",
-                      isActive(link.href)
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-secondary"
-                    )}
+                    className={cn("block py-3 px-4 rounded-lg font-medium", isActive(link.href) ? "bg-[#ff5722] text-white" : "text-gray-400")}
                     onClick={() => setIsOpen(false)}
                   >
                     {link.label}
                   </Link>
-                </motion.div>
-              ))}
-
-              <div className="pt-6 space-y-4 border-t border-border">
-                {isLoggedIn ? (
-                  <>
-                    {/* Mobile Notification Bell */}
-                    <button
-                      className="relative flex items-center justify-center w-full py-3 px-4 bg-secondary/50 rounded-lg hover:bg-secondary transition-colors"
-                      onClick={() => {
-                        toast.info("Notifications panel coming soon!");
-                      }}
-                    >
-                      <Bell className="h-5 w-5 mr-2" />
-                      <span>Notifications</span>
-                      {notificationCount > 0 && (
-                        <span className="absolute -top-1 right-4 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                          {notificationCount > 99 ? '99+' : notificationCount}
-                        </span>
-                      )}
-                    </button>
-
-                    <div className="px-4 py-3 bg-secondary/50 rounded-lg">
-                      <p className="font-medium">{userName}</p>
-                      <p className="text-sm text-muted-foreground">{userRoleDisplay}</p>
-                    </div>
-
-                    {isAdmin && (
-                      <Link to="/dashboard" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full">
-                          <Shield className="w-4 h-4 mr-2" />
-                          Admin Dashboard
-                        </Button>
-                      </Link>
-                    )}
-
-                    {isIndustryAdmin && (
-                      <Link to="/industry-admin/dashboard" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full">
-                          <Shield className="w-4 h-4 mr-2" />
-                          Industry Admin
-                        </Button>
-                      </Link>
-                    )}
-
-                    {isMentor && (
-                      <Link to="/mentor/dashboard" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full">
-                          <Shield className="w-4 h-4 mr-2" />
-                          Mentor Dashboard
-                        </Button>
-                      </Link>
-                    )}
-
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      onClick={() => {
-                        handleLogout();
-                        setIsOpen(false);
-                      }}
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </Button>
-                  </>
-                ) : (
-                  !isOnAuthPage && (
-                    <Link to="/auth" onClick={() => setIsOpen(false)}>
-                      <Button variant="accent" className="w-full">
-                        Register
-                      </Button>
-                    </Link>
-                  )
-                )}
-              </div>
+                ))
+              )}
+              
+              {isLoggedIn && (
+                <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                  Logout
+                </Button>
+              )}
             </div>
           </motion.div>
         )}

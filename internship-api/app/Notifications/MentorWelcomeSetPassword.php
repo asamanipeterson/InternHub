@@ -36,7 +36,7 @@ class MentorWelcomeSetPassword extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject('Welcome! Set Your Mentor Password – Action Required')
-            ->greeting("Hello {$notifiable->name},")
+            ->greeting("Hello {$notifiable->first_name},")
             ->line("You've been added as a mentor on Student Industry Connect.")
             ->line("**Your login email is:** {$notifiable->email}")
             ->line("To access your dashboard and see your student bookings, please set your password now.")

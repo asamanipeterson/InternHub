@@ -21,7 +21,9 @@ class MentorController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'                  => 'required|string|max:255',
+            'first_name'            => 'required|string|max:100',
+            'middle_name'           => 'nullable|string|max:100',
+            'last_name'             => 'required|string|max:100',
             'email'                 => 'required|email|max:255|unique:users,email',
             'title'                 => 'required|string|max:255',
             'specialization'        => 'nullable|string|max:255',
@@ -33,10 +35,17 @@ class MentorController extends Controller
             'google_calendar_email' => 'nullable|email|max:255',
         ]);
 
+        // Logic to combine name
+        $fullName = trim($validated['first_name'] . ' ' . ($validated['middle_name'] ?? '') . ' ' . $validated['last_name']);
+        $fullName = str_replace('  ', ' ', $fullName); // Remove double spaces
+
         $user = User::create([
-            'name'      => $validated['name'],
-            'email'     => $validated['email'],
-            'user_type' => 'mentor',
+            'name'          => $fullName, // Combined Name
+            'first_name'    => $validated['first_name'],
+            'middle_name'   => $validated['middle_name'] ?? null,
+            'last_name'     => $validated['last_name'],
+            'email'         => $validated['email'],
+            'user_type'     => 'mentor',
         ]);
 
         $imagePath = null;
@@ -47,7 +56,7 @@ class MentorController extends Controller
 
         $mentor = Mentor::create([
             'user_id'               => $user->id,
-            'name'                  => $validated['name'],
+            'name'                  => $fullName, // Set on mentor as well if column exists
             'title'                 => $validated['title'],
             'specialization'        => $validated['specialization'] ?? null,
             'bio'                   => $validated['bio'] ?? null,
@@ -65,13 +74,18 @@ class MentorController extends Controller
 
     public function profile(Request $request)
     {
-        $mentor = Mentor::where('user_id', $request->user()->id)->first();
-        if (!$mentor) return response()->json(['message' => 'Not found'], 404);
+        $mentor = Mentor::where('user_id', $request->user()->id)->with('user')->first();
+        if (!$mentor) {
+            return response()->json(['message' => 'Mentor not found'], 404);
+        }
 
         return response()->json([
             'id'                  => $mentor->id,
             'uuid'                => $mentor->uuid,
-            'name'                => $mentor->name,
+            'name'                => $mentor->user->name,
+            'first_name'          => $mentor->user->first_name,
+            'middle_name'         => $mentor->user->middle_name,
+            'last_name'           => $mentor->user->last_name,
             'title'               => $mentor->title,
             'is_google_connected' => !empty($mentor->google_refresh_token),
         ]);
@@ -80,7 +94,9 @@ class MentorController extends Controller
     public function connectGoogle(Request $request)
     {
         $mentor = Mentor::where('user_id', $request->user()->id)->first();
-        if (!$mentor) return response()->json(['error' => 'Not found'], 404);
+        if (!$mentor) {
+            return response()->json(['error' => 'Mentor not found'], 404);
+        }
 
         $client = new GoogleClient();
         $client->setClientId(config('services.google.client_id'));
@@ -89,7 +105,7 @@ class MentorController extends Controller
         $client->addScope(GoogleCalendar::CALENDAR_EVENTS);
         $client->setAccessType('offline');
         $client->setPrompt('consent');
-        $client->setState((string)$mentor->id);
+        $client->setState((string) $mentor->id);
 
         return response()->json(['url' => $client->createAuthUrl()]);
     }
@@ -111,26 +127,35 @@ class MentorController extends Controller
         try {
             $token = $client->fetchAccessTokenWithAuthCode($code);
             $mentor = Mentor::find($mentorId);
+
             if ($mentor) {
                 $mentor->update([
-                    'google_access_token'     => $token['access_token'],
+                    'google_access_token'     => $token['access_token'] ?? null,
                     'google_refresh_token'    => $token['refresh_token'] ?? $mentor->google_refresh_token,
-                    'google_token_expires_in'  => $token['expires_in'],
-                    'google_token_created_at'  => now(),
+                    'google_token_expires_in' => $token['expires_in'] ?? null,
+                    'google_token_created_at' => now(),
                 ]);
+
                 return redirect(config('app.frontend_url') . '/mentor/dashboard?google=success');
             }
         } catch (\Exception $e) {
-            Log::error('Google OAuth failed: ' . $e->getMessage());
+            Log::error('Google OAuth callback failed: ' . $e->getMessage());
         }
+
         return redirect(config('app.frontend_url') . '/mentor/dashboard?google=error');
     }
 
     public function update(Request $request, Mentor $mentor)
     {
         $validated = $request->validate([
-            'name'                  => 'required|string|max:255',
+            'first_name'            => 'nullable|string|max:100',
+            'middle_name'           => 'nullable|string|max:100',
+            'last_name'             => 'nullable|string|max:100',
+            'email'                 => 'nullable|email|max:255|unique:users,email,' . $mentor->user->id,
             'title'                 => 'required|string|max:255',
+            'specialization'        => 'nullable|string|max:255',
+            'bio'                   => 'nullable|string',
+            'image'                 => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
             'experience'            => 'required|integer|min:0',
             'rating'                => 'required|numeric|min:0|max:5',
             'session_price'         => 'required|numeric|min:0',
@@ -138,39 +163,56 @@ class MentorController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
+            if ($mentor->image && Storage::disk('public')->exists(str_replace('storage/', '', $mentor->image))) {
+                Storage::disk('public')->delete(str_replace('storage/', '', $mentor->image));
+            }
             $path = $request->file('image')->store('mentors', 'public');
             $validated['image'] = 'storage/' . $path;
         }
 
         $mentor->update($validated);
+
+        if ($mentor->user) {
+            $f = $validated['first_name'] ?? $mentor->user->first_name;
+            $m = $validated['middle_name'] ?? $mentor->user->middle_name;
+            $l = $validated['last_name'] ?? $mentor->user->last_name;
+
+            $fullName = trim($f . ' ' . ($m ?? '') . ' ' . $l);
+            $fullName = str_replace('  ', ' ', $fullName);
+
+            $mentor->user->update([
+                'name'        => $fullName,
+                'email'       => $validated['email'] ?? $mentor->user->email,
+                'first_name'  => $f,
+                'middle_name' => $m,
+                'last_name'   => $l,
+            ]);
+
+            // Sync name back to mentor table if column exists
+            $mentor->update(['name' => $fullName]);
+        }
+
         return response()->json($mentor->load('user'));
     }
 
     public function show($uuid)
     {
-        // Search by uuid column specifically
         $mentor = Mentor::with('user')->where('uuid', $uuid)->first();
-
         if (!$mentor) {
             return response()->json(['message' => 'Mentor not found'], 404);
         }
-
         return response()->json($mentor);
     }
+
     public function destroy(Mentor $mentor)
     {
-        // Delete image if exists
         if ($mentor->image && Storage::disk('public')->exists(str_replace('storage/', '', $mentor->image))) {
             Storage::disk('public')->delete(str_replace('storage/', '', $mentor->image));
         }
-
-        // Delete the linked user (cascade will handle relations if set)
         if ($mentor->user) {
             $mentor->user->delete();
         }
-
         $mentor->delete();
-
         return response()->json(null, 204);
     }
 }

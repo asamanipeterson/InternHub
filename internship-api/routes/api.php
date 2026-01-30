@@ -109,8 +109,11 @@ Route::get('/mentor/set-password/{token}', function (string $token) {
 })->middleware('signed')->name('mentor.set-password');
 
 
-Route::middleware('auth:sanctum')->post('/admin/industry-admins', [AdminController::class, 'createIndustryAdmin'])->middleware('auth:sanctum');
-
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/admin/industry-admins', [AdminController::class, 'createIndustryAdmin']);
+    Route::get('/admin/industry-admins', [AdminController::class, 'getIndustryAdmins']);
+    Route::put('/admin/industry-admins/{id}', [AdminController::class, 'updateIndustryAdmin']);
+});
 
 Route::get('/industry-admin/set-password', function () {
     return view('auth.set-industry-password');

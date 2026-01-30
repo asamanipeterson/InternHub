@@ -25,15 +25,17 @@ class MentorBookingController extends Controller
     public function initiatePayment(Request $request)
     {
         $validated = $request->validate([
-            'mentor_id'          => 'required|exists:mentors,id',
-            'student_name'       => 'required|string|max:255',
-            'student_email'      => 'required|email|max:255',
-            'student_phone'      => 'nullable|string|max:30',
-            'student_age'        => 'required|integer|min:13|max:120',
-            'student_university' => 'required|string|max:255',
-            'student_course'     => 'required|string|max:255',
-            'student_level'      => 'required|string|max:100',
-            'scheduled_at'       => 'required|date|after:now',
+            'mentor_id'           => 'required|exists:mentors,id',
+            'first_name'          => 'required|string|max:100',
+            'last_name'           => 'required|string|max:100',
+            'student_email'       => 'required|email|max:255',
+            'phone'               => 'required|string|max:30',
+            'date_of_birth'       => 'required|date|before:-13 years',
+            'student_institution' => 'required|string|max:255',
+            'student_course'      => 'required|string|max:255',
+            'student_level'       => 'required|string|max:100',
+            'topic_description'   => 'required|string|max:2000',
+            'scheduled_at'        => 'required|date|after:now',
         ]);
 
         $mentor = Mentor::findOrFail($validated['mentor_id']);
@@ -54,16 +56,20 @@ class MentorBookingController extends Controller
 
         $reference = 'mentorbk_' . uniqid() . time();
 
+        // FIXED: Added student_name to resolve the SQL General Error 1364
         $booking = MentorBooking::create([
             'mentor_id'             => $mentor->id,
             'user_id'               => Auth::id(),
-            'student_name'          => $validated['student_name'],
+            'student_name'          => $validated['first_name'] . ' ' . $validated['last_name'],
+            'first_name'            => $validated['first_name'],
+            'last_name'             => $validated['last_name'],
             'student_email'         => $validated['student_email'],
-            'student_phone'         => $validated['student_phone'] ?? null,
-            'age'                   => $validated['student_age'],
-            'student_university'    => $validated['student_university'],
+            'phone'                 => $validated['phone'],
+            'date_of_birth'         => $validated['date_of_birth'],
+            'student_institution'   => $validated['student_institution'],
             'student_course'        => $validated['student_course'],
             'student_level'         => $validated['student_level'],
+            'topic_description'     => $validated['topic_description'],
             'scheduled_at'          => $scheduledAt,
             'paystack_reference'    => $reference,
             'amount'                => $mentor->session_price,
@@ -73,15 +79,15 @@ class MentorBookingController extends Controller
         ]);
 
         $payload = [
-            "amount"       => $mentor->session_price * 100, // kobo/pesewas
+            "amount"       => (int)($mentor->session_price * 100),
             "reference"    => $reference,
             "email"        => $validated['student_email'],
             "currency"     => "GHS",
-            "callback_url" => route('payment.callback'), // or a mentorship-specific callback if needed
+            "callback_url" => route('payment.callback'),
             "metadata"     => [
                 'mentor_id'   => $mentor->id,
                 'booking_id'  => $booking->id,
-                'type'        => 'mentorship' // optional extra identifier
+                'type'        => 'mentorship'
             ]
         ];
 
@@ -123,24 +129,18 @@ class MentorBookingController extends Controller
             $booking = MentorBooking::where('paystack_reference', $reference)->first();
 
             if ($booking) {
-                $this->processSuccessfulPayment($data, $booking);
-                // Redirect handled inside processSuccessfulPayment
-            } else {
-                return redirect(config('app.frontend_url') . '/mentorship?booking=failed');
+                return $this->processSuccessfulPayment($data, $booking);
             }
-        } else {
-            return redirect(config('app.frontend_url') . '/mentorship?booking=failed');
         }
+
+        return redirect(config('app.frontend_url') . '/mentorship?booking=failed');
     }
 
     /**
-     * Webhook handler → now in PaymentController (unified)
-     * This method is kept for reference / backward compatibility if needed
+     * Webhook handler
      */
     public function handleWebhook(Request $request)
     {
-        // Deprecated / moved to PaymentController
-        // You can remove this route entirely now
         return response()->json(['status' => 'deprecated - use /payment/webhook'], 200);
     }
 
@@ -185,15 +185,21 @@ class MentorBookingController extends Controller
         }
 
         // Response handling
-        if (request()->isMethod('post')) { // webhook
+        if (request()->isMethod('post')) {
             return response()->json(['success' => true]);
+        }
+
+        // Use Carbon properly to avoid Syntax/ParseErrors
+        $formattedDate = 'N/A';
+        if ($booking->scheduled_at) {
+            $formattedDate = Carbon::parse($booking->scheduled_at)->format('Y-m-d H:i');
         }
 
         // callback redirect
         $query = http_build_query([
             'booking'  => 'success',
             'meetLink' => $meetLink ?? 'Link generation failed - contact support',
-            'date'     => $booking->scheduled_at?->format('Y-m-d H:i') ?? 'N/A',
+            'date'     => $formattedDate,
         ]);
 
         return redirect(config('app.frontend_url') . '/mentorship/booked?' . $query);
@@ -215,11 +221,16 @@ class MentorBookingController extends Controller
         $client->setRedirectUri(config('services.google.redirect_uri'));
         $client->addScope(GoogleCalendar::CALENDAR_EVENTS);
 
+        // Ensure we are working with timestamps for Carbon
+        $createdTimestamp = $mentor->google_token_created_at instanceof Carbon
+            ? $mentor->google_token_created_at->timestamp
+            : (is_string($mentor->google_token_created_at) ? strtotime($mentor->google_token_created_at) : time() - 3600);
+
         $accessToken = [
             'access_token'  => $mentor->google_access_token,
             'refresh_token' => $mentor->google_refresh_token,
             'expires_in'    => $mentor->google_token_expires_in ?? 3600,
-            'created'       => $mentor->google_token_created_at?->timestamp ?? time() - 3600,
+            'created'       => $createdTimestamp,
         ];
 
         $client->setAccessToken($accessToken);
@@ -248,14 +259,26 @@ class MentorBookingController extends Controller
         $service = new GoogleCalendar($client);
 
         $startTime = Carbon::parse($booking->scheduled_at);
-        $endTime   = $startTime->copy()->addMinutes(45);
+        $endTime   = $startTime->copy()->addHours(1);
+
+        // Ensure name fallbacks exist
+        $studentFullName = $booking->student_name ?? ($booking->first_name . ' ' . $booking->last_name);
+        $dobFormatted = $booking->date_of_birth ? Carbon::parse($booking->date_of_birth)->format('d M Y') : 'N/A';
 
         $event = new GoogleEvent([
-            'summary'     => "Mentorship: {$booking->student_name} with {$mentor->name}",
-            'description' => "Student: {$booking->student_name} ({$booking->student_email})\nUniversity: {$booking->student_university}\nCourse: {$booking->student_course}",
+            'summary'     => "Mentorship Session: {$studentFullName} with " . ($mentor->name ?? 'Mentor'),
+            'description' => "Student: {$studentFullName} ({$booking->student_email})\n" .
+                "Phone: {$booking->phone}\n" .
+                "Date of Birth: {$dobFormatted}\n" .
+                "Institution: {$booking->student_institution}\n" .
+                "Course: {$booking->student_course}\n" .
+                "Level: {$booking->student_level}\n\n" .
+                "Discussion Topic / Goal:\n" .
+                ($booking->topic_description ?: 'Not specified') . "\n\n" .
+                "Session scheduled for: " . $startTime->format('D, d M Y @ H:i') . " GMT",
             'start'       => [
                 'dateTime' => $startTime->toRfc3339String(),
-                'timeZone' => 'Africa/Accra', // Ghana time
+                'timeZone' => 'Africa/Accra',
             ],
             'end'         => [
                 'dateTime' => $endTime->toRfc3339String(),
@@ -279,25 +302,13 @@ class MentorBookingController extends Controller
                 $event,
                 [
                     'conferenceDataVersion' => 1,
-                    'sendUpdates'           => 'all', // notify attendees
+                    'sendUpdates'           => 'all',
                 ]
             );
 
-            $meetLink = $createdEvent->getHangoutLink();
-
-            if (!$meetLink) {
-                Log::warning("Google event created but no Meet link", [
-                    'event_id' => $createdEvent->getId(),
-                ]);
-            }
-
-            return $meetLink;
+            return $createdEvent->getHangoutLink();
         } catch (GoogleServiceException $e) {
-            Log::error("Google Calendar API error", [
-                'message' => $e->getMessage(),
-                'code'    => $e->getCode(),
-                'errors'  => $e->getErrors(),
-            ]);
+            Log::error("Google Calendar API error", ['message' => $e->getMessage()]);
             return null;
         } catch (\Exception $e) {
             Log::error("Unexpected error creating Meet event", ['error' => $e->getMessage()]);
@@ -334,7 +345,7 @@ class MentorBookingController extends Controller
             $current = Carbon::parse($avail->start_time);
             $end     = Carbon::parse($avail->end_time);
 
-            while ($current->copy()->addMinutes(45) <= $end) {
+            while ($current->copy()->addHour() <= $end) {
                 $time = $current->format('H:i');
                 if (!in_array($time, $bookedTimes)) {
                     $slots[] = $time;
@@ -346,9 +357,6 @@ class MentorBookingController extends Controller
         return response()->json(array_values(array_unique($slots)));
     }
 
-    /**
-     * Get bookings for the authenticated mentor
-     */
     /**
      * Get bookings for the authenticated mentor
      */
@@ -367,30 +375,33 @@ class MentorBookingController extends Controller
                 return [
                     'id'              => $b->id,
                     'student'         => [
-                        'name'       => $b->student_name,
-                        'email'      => $b->student_email,
-                        'phone'      => $b->student_phone,
-                        'age'        => $b->age,                   // ← added
-                        'university' => $b->student_university,
-                        'course'     => $b->student_course,
-                        'level'      => $b->student_level,
+                        'name'              => $b->student_name ?: ($b->first_name . ' ' . $b->last_name),
+                        'email'             => $b->student_email,
+                        'phone'             => $b->phone,
+                        'dob'                => $b->date_of_birth, // ADD THIS LINE
+                        'university'        => $b->student_institution,
+                        'course'            => $b->student_course,
+                        'level'             => $b->student_level,
+                        'topic_description' => $b->topic_description,
                     ],
-                    'scheduled_at'    => $b->scheduled_at,
-                    'status'          => $b->status,
-                    'google_meet_link' => $b->google_meet_link,
+                    'scheduled_at'      => $b->scheduled_at ? \Carbon\Carbon::parse($b->scheduled_at)->toDateTimeString() : null,
+                    'status'            => $b->status,
+                    'google_meet_link'  => $b->google_meet_link,
                 ];
             });
 
         return response()->json($bookings);
     }
-
     /**
      * Admin: Get all paid mentorship bookings
      */
     public function getAdminBookings()
     {
         return response()->json(
-            MentorBooking::with('mentor')->where('status', 'paid')->latest()->get()
+            MentorBooking::with(['mentor.user']) // This loads the mentor AND the user linked to it
+                ->where('status', 'paid')
+                ->latest()
+                ->get()
         );
     }
 }

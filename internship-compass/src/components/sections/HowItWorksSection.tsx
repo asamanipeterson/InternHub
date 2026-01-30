@@ -12,13 +12,13 @@ const steps = [
     number: "02",
     icon: Search,
     title: "Explore Opportunities",
-    description: "Browse through internship listings or find the right counsellor for your needs.",
+    description: "Browse through internship listings or find the right mentor for your needs.",
   },
   {
     number: "03",
     icon: CalendarCheck,
     title: "Apply or Book",
-    description: "Submit your applications or schedule counselling sessions with just a few clicks.",
+    description: "Submit your applications or schedule Mentorship sessions with just a few clicks.",
   },
   {
     number: "04",

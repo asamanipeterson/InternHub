@@ -335,10 +335,10 @@ const Internships = () => {
                           }`}
                         >
                           {company.is_paid ? (
-                            <>₵ Paid</>
+                            <>₵ Paid Internship</>
                           ) : (
                             <>
-                              <XCircle className="h-3.5 w-3.5 mr-1" /> Unpaid
+                              <XCircle className="h-3.5 w-3.5 mr-1" /> Unpaid Internship
                             </>
                           )}
                         </span>
@@ -554,7 +554,7 @@ const Internships = () => {
                         : "text-red-600 font-medium"
                     }
                   >
-                    {currentDescriptionCompany?.is_paid ? "Paid Internship" : "Unpaid Internship"}
+                    {currentDescriptionCompany?.is_paid ? "PaidInternship" : "UnpaidInternship"}
                   </span>
                 </DialogDescription>
               </DialogHeader>
