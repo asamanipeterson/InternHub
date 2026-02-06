@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -120,79 +122,75 @@ const MentorSkeleton = () => (
 );
 
 const Mentorship = () => {
+  const navigate = useNavigate();
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [itemsToShow, setItemsToShow] = useState(3);
+  const [itemsToShow, setItemsToShow] = useState(1);
 
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bioOpen, setBioOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [selectedBioMentor, setSelectedBioMentor] = useState<Mentor | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
     student_email: "",
     phone: "",
-    date_of_birth: "",
+    date_of_birth: null as Date | null,
     student_institution: "",
     student_course: "",
     student_level: "",
     topic_description: "",
-    scheduled_at: ""
+    scheduled_at: "",
   });
 
-  const navigate = useNavigate();
-
+  // Responsive carousel items
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) setItemsToShow(1);
-      else if (window.innerWidth < 1024) setItemsToShow(2);
-      else setItemsToShow(3);
+    const updateItemsToShow = () => {
+      const width = window.innerWidth;
+      if (width >= 1024) setItemsToShow(3);
+      else if (width >= 768) setItemsToShow(2);
+      else setItemsToShow(1);
+      setCurrentIndex(0);
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    updateItemsToShow();
+    window.addEventListener("resize", updateItemsToShow);
+    return () => window.removeEventListener("resize", updateItemsToShow);
   }, []);
 
+  // Fetch current user
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get("booking");
-    const meetLink = params.get("meetLink");
+    const fetchUser = async () => {
+      try {
+        const res = await api.get("/api/student/profile");
+        setCurrentUser(res.data);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error("Failed to fetch user profile", err);
+        setIsAuthenticated(false);
+      }
+    };
+    fetchUser();
+  }, []);
 
-    if (status === "success") {
-      toast.success("Payment successful!", {
-        description: "Your Google Meet link has been generated and emailed to you.",
-        duration: 10000,
-      });
-      if (meetLink) console.log("Session Link:", meetLink);
-      navigate("/mentorship", { replace: true });
-    } else if (status === "failed") {
-      toast.error("Payment failed", {
-        description: "The transaction was not completed. Please try again.",
-      });
-      navigate("/mentorship", { replace: true });
-    }
-  }, [navigate]);
-
+  // Fetch mentors
   useEffect(() => {
     const fetchMentors = async () => {
       try {
-        const res = await api.get("/api/mentors");
-        setMentors(res.data);
-        setIsAuthenticated(true);
+        const response = await api.get("/api/mentors");
+        setMentors(response.data || []);
       } catch (err: any) {
-        if (err.response?.status === 401 || err.response?.status === 403) {
-          setIsAuthenticated(false);
-        } else {
-          toast.error("Failed to load mentors");
-        }
+        toast.error("Failed to load mentors");
         console.error(err);
       } finally {
         setLoading(false);
@@ -202,34 +200,41 @@ const Mentorship = () => {
     fetchMentors();
   }, []);
 
+  const canGoNext = currentIndex < mentors.length - itemsToShow;
+  const canGoPrev = currentIndex > 0;
+
   const nextSlide = () => {
-    if (currentIndex < mentors.length - itemsToShow) {
-      setCurrentIndex(prev => prev + 1);
-    }
+    if (canGoNext) setCurrentIndex(prev => prev + 1);
   };
 
   const prevSlide = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
-    }
+    if (canGoPrev) setCurrentIndex(prev => prev - 1);
+  };
+
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    const threshold = 50;
+    if (info.offset.x < -threshold && canGoNext) nextSlide();
+    else if (info.offset.x > threshold && canGoPrev) prevSlide();
   };
 
   const openBookingDialog = (mentor: Mentor) => {
     setSelectedMentor(mentor);
-    setSelectedDate("");
+    setSelectedDate(null);
     setAvailableTimes([]);
+
     setFormData({
-      first_name: "",
-      last_name: "",
-      student_email: "",
-      phone: "",
-      date_of_birth: "",
+      first_name: currentUser?.first_name || "",
+      last_name: currentUser?.last_name || "",
+      student_email: currentUser?.email || "",
+      phone: currentUser?.phone || currentUser?.phone_number || "",
+      date_of_birth: currentUser?.date_of_birth ? new Date(currentUser.date_of_birth) : null,
       student_institution: "",
       student_course: "",
       student_level: "",
       topic_description: "",
-      scheduled_at: ""
+      scheduled_at: "",
     });
+
     setBookingOpen(true);
   };
 
@@ -241,16 +246,18 @@ const Mentorship = () => {
   const handleSubmitBooking = async () => {
     if (!selectedMentor) return;
 
-    if (!formData.first_name.trim() ||
-        !formData.last_name.trim() ||
-        !formData.student_email.trim() ||
-        !formData.phone.trim() ||
-        !formData.date_of_birth ||
-        !formData.student_institution.trim() ||
-        !formData.student_course.trim() ||
-        !formData.student_level.trim() ||
-        !formData.topic_description.trim() ||
-        !formData.scheduled_at) {
+    if (
+      !formData.first_name.trim() ||
+      !formData.last_name.trim() ||
+      !formData.student_email.trim() ||
+      !formData.phone.trim() ||
+      !formData.date_of_birth ||
+      !formData.student_institution.trim() ||
+      !formData.student_course.trim() ||
+      !formData.student_level.trim() ||
+      !formData.topic_description.trim() ||
+      !formData.scheduled_at
+    ) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -263,16 +270,16 @@ const Mentorship = () => {
         last_name: formData.last_name,
         student_email: formData.student_email,
         phone: formData.phone,
-        date_of_birth: formData.date_of_birth,
+        date_of_birth: formData.date_of_birth?.toISOString().split("T")[0],
         student_institution: formData.student_institution,
         student_course: formData.student_course,
         student_level: formData.student_level,
         topic_description: formData.topic_description,
-        scheduled_at: formData.scheduled_at
+        scheduled_at: formData.scheduled_at,
       });
 
       if (response.data.success) {
-        toast.info(`Redirecting to payment...`);
+        toast.info("Redirecting to payment...");
         window.location.href = response.data.authorization_url;
       }
     } catch (err: any) {
@@ -294,6 +301,17 @@ const Mentorship = () => {
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(" ") : "Mentor Name";
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-lg text-primary-foreground/80">Loading available mentors...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -446,12 +464,22 @@ const Mentorship = () => {
                 </p>
               </motion.div>
 
-              <div className="relative group max-w-6xl mx-auto">
-                <div className="absolute top-1/2 -translate-y-1/2 -left-4 md:-left-12 z-30">
+              <div className="relative group max-w-7xl mx-auto">
+                <div className="absolute top-1/2 -translate-y-1/2 -left-4 md:-left-12 z-30 pointer-events-none">
                   <AnimatePresence>
-                    {currentIndex > 0 && (
-                      <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-                        <Button variant="accent" size="icon" className="rounded-full h-12 w-12 shadow-xl" onClick={prevSlide}>
+                    {canGoPrev && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Button
+                          variant="accent"
+                          size="icon"
+                          className="rounded-full h-12 w-12 shadow-xl pointer-events-auto"
+                          onClick={prevSlide}
+                        >
                           <ChevronLeft className="w-8 h-8" />
                         </Button>
                       </motion.div>
@@ -459,11 +487,21 @@ const Mentorship = () => {
                   </AnimatePresence>
                 </div>
 
-                <div className="absolute top-1/2 -translate-y-1/2 -right-4 md:-right-12 z-30">
+                <div className="absolute top-1/2 -translate-y-1/2 -right-4 md:-right-12 z-30 pointer-events-none">
                   <AnimatePresence>
-                    {mentors.length > itemsToShow && currentIndex < mentors.length - itemsToShow && (
-                      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-                        <Button variant="accent" size="icon" className="rounded-full h-12 w-12 shadow-xl" onClick={nextSlide}>
+                    {canGoNext && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Button
+                          variant="accent"
+                          size="icon"
+                          className="rounded-full h-12 w-12 shadow-xl pointer-events-auto"
+                          onClick={nextSlide}
+                        >
                           <ChevronRight className="w-8 h-8" />
                         </Button>
                       </motion.div>
@@ -473,153 +511,149 @@ const Mentorship = () => {
 
                 <div className="overflow-hidden">
                   <motion.div
-                    className="flex"
+                    className="flex touch-pan-y"
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={0.2}
+                    onDragEnd={handleDragEnd}
                     animate={{ x: `-${currentIndex * (100 / itemsToShow)}%` }}
                     transition={{ type: "spring", stiffness: 260, damping: 26 }}
                   >
-                    {loading ? (
-                      Array(6).fill(null).map((_, i) => (
-                        <div key={i} className="min-w-full md:min-w-[50%] lg:min-w-[33.333%] p-4">
-                          <MentorSkeleton />
-                        </div>
-                      ))
-                    ) : mentors.length > 0 ? (
-                      mentors.map((mentor) => {
-                        const fullName = getFullName(mentor);
-                        const bioText = mentor.bio || "Dedicated mentor committed to your career success.";
-                        const isLongBio = bioText.length > 30;
-                        const truncatedBio = isLongBio ? bioText.substring(0, 30) + "..." : bioText;
+                    {mentors.map((mentor) => {
+                      const fullName = getFullName(mentor);
+                      const bioText = mentor.bio || "Dedicated mentor committed to your career success.";
+                      const isLongBio = bioText.length > 30;
+                      const truncatedBio = isLongBio ? bioText.substring(0, 30) + "..." : bioText;
 
-                        return (
-                          <div key={mentor.id} className="min-w-full md:min-w-[50%] lg:min-w-[33.333%] p-4">
-                            <motion.div
-                              variants={itemVariants}
-                              whileHover={{ y: -10, scale: 1.02 }}
-                              className="group"
+                      return (
+                        <div key={mentor.id} className="min-w-full md:min-w-[50%] lg:min-w-[33.333%] p-4">
+                          <motion.div
+                            variants={itemVariants}
+                            whileHover={{ y: -10, scale: 1.02 }}
+                            className="group"
+                          >
+                            <div
+                              className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
+                              onClick={() => goToProfile(mentor)}
                             >
-                              <div
-                                className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50 cursor-pointer"
-                                onClick={() => goToProfile(mentor)}
-                              >
-                                <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
-                                  <motion.div
-                                    className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
-                                    initial={{ x: "-100%" }}
-                                    whileHover={{ x: "100%" }}
-                                    transition={{ duration: 0.8 }}
+                              <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
+                                <motion.div
+                                  className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
+                                  initial={{ x: "-100%" }}
+                                  whileHover={{ x: "100%" }}
+                                  transition={{ duration: 0.8 }}
+                                />
+                                {mentor.image ? (
+                                  <img
+                                    src={`/${mentor.image}`}
+                                    alt={fullName}
+                                    className="w-full h-full object-cover"
                                   />
-                                  {mentor.image ? (
-                                    <img
-                                      src={`/${mentor.image}`}
-                                      alt={fullName}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <motion.span
-                                      className="text-8xl relative z-10"
-                                      whileHover={{
-                                        scale: 1.2,
-                                        rotate: [0, -15, 15, -15, 15, 0],
-                                        transition: { duration: 0.6, type: "spring", stiffness: 300 },
-                                      }}
-                                    >
-                                      👤
-                                    </motion.span>
-                                  )}
-                                  <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                                    <Star className="w-4 h-4 text-accent fill-accent" />
-                                    <span className="text-sm font-bold text-foreground">
-                                      {Number(mentor.rating).toFixed(1)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="p-6">
-                                  <div className="mb-4">
-                                    <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-1">
-                                      {fullName}
-                                    </h3>
-                                    <p className="text-accent font-semibold">{mentor.title}</p>
-                                  </div>
-
-                                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
-                                    <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
-                                      <Award className="w-3.5 h-3.5 text-primary" />
-                                      {mentor.specialization || "General"}
-                                    </span>
-                                    <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
-                                      <Clock className="w-3.5 h-3.5 text-primary" />
-                                      {mentor.experience}+ yrs
-                                    </span>
-                                  </div>
-
-                                  <div className="mb-6">
-                                    <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 min-h-[3rem]">
-                                      {truncatedBio}
-                                    </p>
-                                    {isLongBio && (
-                                      <Button
-                                        variant="link"
-                                        size="sm"
-                                        className="text-accent hover:text-accent/80 p-0 mt-1 h-auto font-medium"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openBioDialog(mentor);
-                                        }}
-                                      >
-                                        Read More
-                                      </Button>
-                                    )}
-                                  </div>
-
-                                  <div className="mb-4 text-center">
-                                    <p className="text-sm text-muted-foreground">Session Fee</p>
-                                    <p className="text-3xl font-bold text-accent">
-                                      GHS {(Number(mentor.session_price) || 0).toFixed(2)}
-                                    </p>
-                                  </div>
-
-                                  <div className="flex gap-3">
-                                    <Button
-                                      variant="accent"
-                                      size="default"
-                                      className="flex-1 rounded-xl"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openBookingDialog(mentor);
-                                      }}
-                                    >
-                                      <Calendar className="w-4 h-4 mr-2" />
-                                      Book Session
-                                    </Button>
-                                    <Button variant="outline" size="icon" className="rounded-xl">
-                                      <MessageCircle className="w-4 h-4" />
-                                    </Button>
-                                  </div>
+                                ) : (
+                                  <motion.span
+                                    className="text-8xl relative z-10"
+                                    whileHover={{
+                                      scale: 1.2,
+                                      rotate: [0, -15, 15, -15, 15, 0],
+                                      transition: { duration: 0.6, type: "spring", stiffness: 300 },
+                                    }}
+                                  >
+                                    👤
+                                  </motion.span>
+                                )}
+                                <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                                  <Star className="w-4 h-4 text-accent fill-accent" />
+                                  <span className="text-sm font-bold text-foreground">
+                                    {Number(mentor.rating).toFixed(1)}
+                                  </span>
                                 </div>
                               </div>
-                            </motion.div>
-                          </div>
-                        );
-                      })
-                    ) : null}
+
+                              <div className="p-6">
+                                <div className="mb-4">
+                                  <h3 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors mb-1">
+                                    {fullName}
+                                  </h3>
+                                  <p className="text-accent font-semibold">{mentor.title}</p>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
+                                  <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                                    <Award className="w-3.5 h-3.5 text-primary" />
+                                    {mentor.specialization || "General"}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
+                                    <Clock className="w-3.5 h-3.5 text-primary" />
+                                    {mentor.experience}+ yrs
+                                  </span>
+                                </div>
+
+                                <div className="mb-6">
+                                  <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 min-h-[3rem]">
+                                    {truncatedBio}
+                                  </p>
+                                  {isLongBio && (
+                                    <Button
+                                      variant="link"
+                                      size="sm"
+                                      className="text-accent hover:text-accent/80 p-0 mt-1 h-auto font-medium"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openBioDialog(mentor);
+                                      }}
+                                    >
+                                      Read More
+                                    </Button>
+                                  )}
+                                </div>
+
+                                <div className="mb-4 text-center">
+                                  <p className="text-sm text-muted-foreground">Session Fee</p>
+                                  <p className="text-3xl font-bold text-accent">
+                                    GHS {(Number(mentor.session_price) || 0).toFixed(2)}
+                                  </p>
+                                </div>
+
+                                <div className="flex gap-3">
+                                  <Button
+                                    variant="accent"
+                                    size="default"
+                                    className="flex-1 rounded-xl"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openBookingDialog(mentor);
+                                    }}
+                                  >
+                                    <Calendar className="w-4 h-4 mr-2" />
+                                    Book Session
+                                  </Button>
+                                  <Button variant="outline" size="icon" className="rounded-xl">
+                                    <MessageCircle className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </div>
+                      );
+                    })}
                   </motion.div>
                 </div>
-              </div>
 
-              {!loading && mentors.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-center py-20"
-                >
-                  <User className="w-20 h-20 text-muted-foreground mx-auto mb-6" />
-                  <h3 className="text-2xl font-semibold mb-4">No mentors available yet</h3>
-                  <p className="text-muted-foreground text-lg max-w-md mx-auto">
-                    We're working hard to bring you top industry experts. Check back soon!
-                  </p>
-                </motion.div>
-              )}
+                {!mentors.length && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-center py-20"
+                  >
+                    <User className="w-20 h-20 text-muted-foreground mx-auto mb-6" />
+                    <h3 className="text-2xl font-semibold mb-4">No mentors available yet</h3>
+                    <p className="text-muted-foreground text-lg max-w-md mx-auto">
+                      We're working hard to bring you top industry experts. Check back soon!
+                    </p>
+                  </motion.div>
+                )}
+              </div>
             </div>
           </section>
 
@@ -713,6 +747,7 @@ const Mentorship = () => {
         </>
       )}
 
+      {/* Booking Dialog */}
       <Dialog open={bookingOpen} onOpenChange={setBookingOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -725,40 +760,42 @@ const Mentorship = () => {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="first_name">First Name *</Label>
+                <Label>First Name <span className="text-red-600">*</span></Label>
                 <Input
-                  id="first_name"
                   value={formData.first_name}
+                  disabled={!!currentUser?.first_name}
                   onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   placeholder="John"
+                  className={currentUser?.first_name ? "bg-secondary/50 cursor-not-allowed" : ""}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="last_name">Last Name (Surname) *</Label>
+                <Label>Last Name (Surname) <span className="text-red-600">*</span></Label>
                 <Input
-                  id="last_name"
                   value={formData.last_name}
+                  disabled={!!currentUser?.last_name}
                   onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   placeholder="Doe"
+                  className={currentUser?.last_name ? "bg-secondary/50 cursor-not-allowed" : ""}
                 />
               </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label>Email <span className="text-red-600">*</span></Label>
               <Input
-                id="email"
                 type="email"
                 value={formData.student_email}
+                disabled={!!currentUser?.email}
                 onChange={(e) => setFormData({ ...formData, student_email: e.target.value })}
                 placeholder="john.doe@example.com"
+                className={currentUser?.email ? "bg-secondary/50 cursor-not-allowed" : ""}
               />
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="phone">Phone Number *</Label>
+              <Label>Phone Number <span className="text-red-600">*</span></Label>
               <Input
-                id="phone"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="+233 24 123 4567"
@@ -766,20 +803,27 @@ const Mentorship = () => {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="date_of_birth">Date of Birth *</Label>
-              <Input
-                id="date_of_birth"
-                type="date"
-                value={formData.date_of_birth}
-                max={new Date().toISOString().split("T")[0]}
-                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-              />
+              <Label>Date of Birth <span className="text-red-600">*</span></Label>
+              <div className="relative">
+                <DatePicker
+                  selected={formData.date_of_birth}
+                  onChange={(date: Date | null) => setFormData({ ...formData, date_of_birth: date })}
+                  dateFormat="yyyy-MM-dd"
+                  maxDate={new Date()}
+                  showYearDropdown
+                  scrollableYearDropdown
+                  yearDropdownItemNumber={100}
+                  placeholderText="Select your date of birth"
+                  className="w-full px-4 py-2 pr-10 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                  calendarClassName="bg-card border border-border shadow-lg rounded-md"
+                />
+                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="institution">Institution *</Label>
+              <Label>Institution <span className="text-red-600">*</span></Label>
               <Input
-                id="institution"
                 value={formData.student_institution}
                 onChange={(e) => setFormData({ ...formData, student_institution: e.target.value })}
                 placeholder="University of Ghana / Ashesi University / ..."
@@ -787,9 +831,8 @@ const Mentorship = () => {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="course">Programme / Course *</Label>
+              <Label>Programme / Course <span className="text-red-600">*</span></Label>
               <Input
-                id="course"
                 value={formData.student_course}
                 onChange={(e) => setFormData({ ...formData, student_course: e.target.value })}
                 placeholder="BSc Computer Science"
@@ -797,9 +840,8 @@ const Mentorship = () => {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="level">Level / Year *</Label>
+              <Label>Level / Year <span className="text-red-600">*</span></Label>
               <Input
-                id="level"
                 value={formData.student_level}
                 onChange={(e) => setFormData({ ...formData, student_level: e.target.value })}
                 placeholder="Level 300 / 3rd Year / Masters Year 1"
@@ -807,9 +849,8 @@ const Mentorship = () => {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="topic_description">What would you like to discuss? *</Label>
+              <Label>What would you like to discuss? <span className="text-red-600">*</span></Label>
               <Textarea
-                id="topic_description"
                 value={formData.topic_description}
                 onChange={(e) => setFormData({ ...formData, topic_description: e.target.value })}
                 placeholder="e.g. Career switch to data analysis, CV review for tech roles, preparing for software engineering interviews, how to negotiate salary, etc."
@@ -818,48 +859,79 @@ const Mentorship = () => {
             </div>
 
             <div className="grid gap-2">
-              <Label>Preferred Date *</Label>
-              <Input
-                type="date"
-                min={new Date().toISOString().split("T")[0]}
-                value={selectedDate}
-                onChange={async (e) => {
-                  const date = e.target.value;
-                  setSelectedDate(date);
-                  setFormData({ ...formData, scheduled_at: "" });
-                  if (date && selectedMentor) {
-                    try {
-                      const res = await api.get(`/api/mentors/${selectedMentor.uuid}/available-slots?date=${date}`);
-                      setAvailableTimes(res.data || []);
-                    } catch (err) {
+              <Label>Preferred Date <span className="text-red-600">*</span></Label>
+              <div className="relative">
+                <DatePicker
+                  selected={selectedDate}
+                  onChange={(date: Date | null) => {
+                    if (date) {
+                      const dateStr = date.toISOString().split("T")[0];
+                      setSelectedDate(date);
+                      setFormData({ ...formData, scheduled_at: "" });
+
+                      if (selectedMentor) {
+                        api
+                          .get(`/api/mentors/${selectedMentor.uuid}/available-slots?date=${dateStr}`)
+                          .then((res) => setAvailableTimes(res.data || []))
+                          .catch(() => {
+                            setAvailableTimes([]);
+                            toast.error("Could not load available times");
+                          });
+                      }
+                    } else {
+                      setSelectedDate(null);
+                      setFormData({ ...formData, scheduled_at: "" });
                       setAvailableTimes([]);
-                      toast.error("Could not load available times");
                     }
-                  }
-                }}
-              />
+                  }}
+                  dateFormat="yyyy-MM-dd"
+                  minDate={new Date()}
+                  placeholderText="Select preferred date"
+                  className="w-full px-4 py-2 pr-10 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                  calendarClassName="bg-card border border-border shadow-lg rounded-md"
+                />
+                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
 
             {selectedDate && (
               <div className="grid gap-2">
-                <Label>Available Time Slots *</Label>
+                <Label>Available Time Slots <span className="text-red-600">*</span></Label>
+
                 {availableTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                    {availableTimes.map((time) => (
-                      <Button
-                        key={time}
-                        variant={formData.scheduled_at === `${selectedDate}T${time}` ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFormData({ ...formData, scheduled_at: `${selectedDate}T${time}` })}
-                      >
-                        {time}
-                      </Button>
-                    ))}
+                  <div className="max-h-64 overflow-y-auto pr-2 -mr-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 py-1">
+                      {availableTimes.map((time) => {
+                        const isSelected = formData.scheduled_at === `${selectedDate.toISOString().split("T")[0]}T${time}`;
+                        return (
+                          <Button
+                            key={time}
+                            variant={isSelected ? "default" : "outline"}
+                            size="sm"
+                            className={`
+                              transition-all duration-200
+                              ${isSelected 
+                                ? "bg-accent text-base shadow-md" 
+                                : "hover:bg-accent/30 hover:border-accent/50 border-foreground/50"}
+                              rounded-lg py-5 text-base font-medium
+                            `}
+                            onClick={() => 
+                              setFormData({ 
+                                ...formData, 
+                                scheduled_at: `${selectedDate.toISOString().split("T")[0]}T${time}` 
+                              })
+                            }
+                          >
+                            {time}
+                          </Button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-2">
+                  <div className="text-sm text-muted-foreground text-center py-6 bg-secondary/30 rounded-lg border border-border/50">
                     No available time slots on this date
-                  </p>
+                  </div>
                 )}
               </div>
             )}
@@ -880,6 +952,7 @@ const Mentorship = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Bio Dialog */}
       <Dialog open={bioOpen} onOpenChange={setBioOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader className="relative pb-4">

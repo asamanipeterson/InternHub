@@ -99,8 +99,11 @@ const PendingApplications = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center pt-28">
-        <p className="text-lg">Loading pending applications...</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-lg text-primary-foreground/80">Loading pending applications...</p>
+        </div>
       </div>
     );
   }
@@ -109,16 +112,44 @@ const PendingApplications = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-primary-foreground mb-4">
-            Pending Applications
-          </h1>
-          <p className="text-primary-foreground/80 text-lg">
-            {bookings.length} application{bookings.length !== 1 ? 's' : ''} awaiting review
-          </p>
-        </div>
-      </section>
+        <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
+          <div className="container mx-auto px-4 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center max-w-4xl mx-auto"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.7 }}
+                className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-5"
+              >
+                Pending{" "}
+                <span className="relative inline-block">
+                  <span className="text-accent">Applications</span>
+                  <motion.span
+                    className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.8, delay: 0.8 }}
+                  />
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.7 }}
+                className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
+              >
+              {bookings.length} application{bookings.length !== 1 ? 's' : ''} awaiting review
+              </motion.p>
+            </motion.div>
+          </div>
+        </section>
+     
 
       <section className="py-12">
         <div className="container mx-auto px-4 lg:px-8">

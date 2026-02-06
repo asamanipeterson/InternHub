@@ -149,7 +149,7 @@ const Auth = () => {
           navigate("/mentor/dashboard", { replace: true });
         } else {
           toast.success(`Welcome, ${user.name}!`);
-          navigate("/", { replace: true });
+          navigate("/student/dashboard", { replace: true });
         }
       } else {
         toast.error("Login successful, but user data is missing.");

@@ -356,7 +356,53 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Password set successfully',
             'user'    => $user,
-            'token'   => $token,
+            'token'   => $token
         ]);
+    }
+
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'university' => $user->university,
+            'course' => $user->course,
+            'year' => $user->year,
+            'date_of_birth'   => $user->date_of_birth,
+            'bio' => $user->bio,
+            'linkedin' => $user->linkedin,
+            'github' => $user->github,
+            'profile_picture' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'phone' => 'nullable|string|max:20',
+            'university' => 'nullable|string|max:255',
+            'course' => 'nullable|string|max:255',
+            'year' => 'nullable|string|max:100',
+            'date_of_birth'  => 'nullable|date|before:-15 years',
+            'bio' => 'nullable|string|max:1000',
+            'linkedin' => 'nullable|url|max:255',
+            'github' => 'nullable|url|max:255',
+            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        if ($request->hasFile('profile_picture')) {
+            $path = $request->file('profile_picture')->store('profiles', 'public');
+            $validated['profile_picture'] = $path;
+        }
+
+        $user->update($validated);
+
+        return response()->json(['message' => 'Profile updated successfully']);
     }
 }

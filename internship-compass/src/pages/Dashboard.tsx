@@ -59,6 +59,7 @@ import {
   Star,
   Award,
   X,
+  Sparkles,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
@@ -141,7 +142,6 @@ interface IndustryAdmin {
 const ITEMS_PER_PAGE = 10;
 const REFRESH_INTERVAL = 25000;
 const INDUSTRIES_PER_LOAD = 6;
-
 const INDUSTRIES = [
   "Technology", "Finance", "Energy", "HealthCare", "Arts & Design", "Education", "Manufacturing",
   "Telecommunications", "Real Estate", "Agriculture", "Retail & E-commerce", "Transportation",
@@ -167,7 +167,6 @@ const itemVariants = {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-
   const [companies, setCompanies] = useState<Company[]>([]);
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [allGroupedBookings, setAllGroupedBookings] = useState<GroupedBooking[]>([]);
@@ -176,8 +175,8 @@ const Dashboard = () => {
   const [mentorBookings, setMentorBookings] = useState<MentorBooking[]>([]);
   const [industryAdmins, setIndustryAdmins] = useState<IndustryAdmin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forcedLoading, setForcedLoading] = useState(true); // minimum 2 seconds loader
   const [currentUser, setCurrentUser] = useState<any | null>(null);
-
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companyFile, setCompanyFile] = useState<File | null>(null);
@@ -192,7 +191,6 @@ const Dashboard = () => {
     is_paid: true,
     requirements: "",
   });
-
   const [mentorDialogOpen, setMentorDialogOpen] = useState(false);
   const [editingMentor, setEditingMentor] = useState<Mentor | null>(null);
   const [mentorFile, setMentorFile] = useState<File | null>(null);
@@ -210,7 +208,6 @@ const Dashboard = () => {
     session_price: 200.00,
     google_calendar_email: "",
   });
-
   const [availabilityDialogOpen, setAvailabilityDialogOpen] = useState(false);
   const [selectedMentorForAvailability, setSelectedMentorForAvailability] = useState<Mentor | null>(null);
   const [availabilityForm, setAvailabilityForm] = useState({
@@ -219,20 +216,16 @@ const Dashboard = () => {
     end_time: "17:00"
   });
   const [savingAvailability, setSavingAvailability] = useState(false);
-
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [currentCvPath, setCurrentCvPath] = useState<string | null>(null);
   const [currentStudentName, setCurrentStudentName] = useState<string>("");
   const [currentCompanyName, setCurrentCompanyName] = useState<string>("");
-
   const [bioOpen, setBioOpen] = useState(false);
   const [selectedBioMentor, setSelectedBioMentor] = useState<Mentor | null>(null);
-
   const [industrySearch, setIndustrySearch] = useState("");
   const [visibleIndustryCount, setVisibleIndustryCount] = useState(INDUSTRIES_PER_LOAD);
   const [visibleCompanies, setVisibleCompanies] = useState(ITEMS_PER_PAGE);
   const [visibleMentors, setVisibleMentors] = useState(ITEMS_PER_PAGE);
-
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [editingAdminId, setEditingAdminId] = useState<string | null>(null);
   const [adminForm, setAdminForm] = useState({
@@ -241,14 +234,12 @@ const Dashboard = () => {
   });
 
   const getCvUrl = (path: string) => `${api.defaults.baseURL}/storage/${path}`;
-
   const companyFileInputRef = useRef<HTMLInputElement>(null);
   const mentorFileInputRef = useRef<HTMLInputElement>(null);
 
   const totalSlots = companies.reduce((acc, c) => acc + (c.total_slots || 0), 0);
   const availableSlotsTotal = companies.reduce((acc, c) => acc + (c.available_slots || 0), 0);
   const bookedSlots = totalSlots - availableSlotsTotal;
-
   const pendingInternshipBookings = allGroupedBookings.reduce((acc, group) => acc + (group.pending || 0), 0);
   const bookedMentorships = mentorBookings.length;
 
@@ -273,6 +264,8 @@ const Dashboard = () => {
     };
 
     const fetchData = async () => {
+      const minimumDelay = new Promise(resolve => setTimeout(resolve, 2000));
+
       try {
         const [companiesRes, mentorsRes, bookingsRes, mentorBookingsRes, adminsRes] = await Promise.all([
           api.get("/api/companies"),
@@ -281,6 +274,8 @@ const Dashboard = () => {
           api.get("/api/admin/mentor-bookings"),
           api.get("/api/admin/industry-admins"),
         ]);
+
+        await Promise.all([minimumDelay, Promise.resolve()]);
 
         setCompanies(companiesRes.data || []);
         setMentors(mentorsRes.data || []);
@@ -294,8 +289,10 @@ const Dashboard = () => {
       } catch (err: any) {
         toast.error("Failed to load dashboard data");
         console.error("Dashboard fetch error:", err);
+        await minimumDelay;
       } finally {
         setLoading(false);
+        setForcedLoading(false);
       }
     };
 
@@ -312,16 +309,13 @@ const Dashboard = () => {
       setFilteredCount(0);
       return;
     }
-
     const searchLower = industrySearch.trim().toLowerCase();
     let filtered = allGroupedBookings;
-
     if (searchLower) {
       filtered = allGroupedBookings.filter(group =>
         group.industry.toLowerCase().includes(searchLower)
       );
     }
-
     setFilteredCount(filtered.length);
     setVisibleGroupedBookings(filtered.slice(0, visibleIndustryCount));
   }, [allGroupedBookings, industrySearch, visibleIndustryCount]);
@@ -339,7 +333,6 @@ const Dashboard = () => {
         api.get("/api/admin/mentor-bookings"),
         api.get("/api/admin/industry-admins"),
       ]);
-
       setCompanies(companiesRes.data || []);
       setMentors(mentorsRes.data || []);
       setAllGroupedBookings(bookingsRes.data || []);
@@ -372,12 +365,9 @@ const Dashboard = () => {
       toast.error("Please select at least one day");
       return;
     }
-
     setSavingAvailability(true);
-
     try {
       const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
       const promises = availabilityForm.selectedDays.map(dayIndex =>
         api.post(`/api/mentors/${selectedMentorForAvailability.uuid}/availabilities`, {
           day_of_week: dayNames[dayIndex - 1],
@@ -385,9 +375,7 @@ const Dashboard = () => {
           end_time: availabilityForm.end_time,
         })
       );
-
       await Promise.all(promises);
-
       toast.success(`Availability saved for ${availabilityForm.selectedDays.length} day(s)`);
       setAvailabilityDialogOpen(false);
     } catch (err: any) {
@@ -442,7 +430,6 @@ const Dashboard = () => {
     formData.append("is_paid", companyForm.is_paid ? "1" : "0");
     formData.append("requirements", companyForm.requirements || "");
     if (companyFile) formData.append("logo", companyFile);
-
     try {
       if (editingCompany) {
         await api.post(`/api/companies/${editingCompany.id}?_method=PUT`, formData);
@@ -504,13 +491,11 @@ const Dashboard = () => {
       toast.error("Please fill in all required fields: first name, last name, email, title, session price");
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(mentorForm.email)) {
       toast.error("Please enter a valid email address");
       return;
     }
-
     const formData = new FormData();
     formData.append("first_name", mentorForm.first_name.trim());
     formData.append("middle_name", mentorForm.middle_name?.trim() || "");
@@ -524,7 +509,6 @@ const Dashboard = () => {
     formData.append("session_price", mentorForm.session_price.toString());
     formData.append("google_calendar_email", mentorForm.google_calendar_email?.trim() || "");
     if (mentorFile) formData.append("image", mentorFile);
-
     try {
       if (editingMentor) {
         await api.post(`/api/mentors/${editingMentor.uuid}?_method=PUT`, formData);
@@ -596,13 +580,10 @@ const Dashboard = () => {
   const handleApproveBooking = async (bookingId: string) => {
     const booking = allGroupedBookings.flatMap(g => g.bookings).find(b => b.id === bookingId);
     if (!booking) return;
-
     const confirmed = confirm(
       `Approve ${booking.student_name}'s application?\n\nA payment link will be sent to ${booking.student_email}.`
     );
-
     if (!confirmed) return;
-
     try {
       await api.post(`/api/admin/bookings/${bookingId}/approve`);
       toast.success("Application approved!");
@@ -615,14 +596,11 @@ const Dashboard = () => {
   const handleRejectBooking = async (bookingId: string) => {
     const booking = allGroupedBookings.flatMap(g => g.bookings).find(b => b.id === bookingId);
     if (!booking) return;
-
     const reason = prompt("Please provide a reason for rejection (sent to student):", "");
-
     if (!reason || reason.trim().length < 10) {
       toast.error("Rejection reason must be at least 10 characters.");
       return;
     }
-
     try {
       await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
       toast.success("Application rejected.");
@@ -637,7 +615,6 @@ const Dashboard = () => {
       toast.error("Email and at least one industry are required");
       return;
     }
-
     try {
       await api.post("/api/admin/industry-admins", {
         email: adminForm.email,
@@ -658,17 +635,14 @@ const Dashboard = () => {
       toast.error("No admin selected or no industries assigned");
       return;
     }
-
     try {
       await api.put(`/api/admin/industry-admins/${editingAdminId}`, {
         industries: adminForm.industries,
       });
-
       toast.success("Industry assignments updated successfully");
       setAdminDialogOpen(false);
       setEditingAdminId(null);
       setAdminForm({ email: "", industries: [] });
-
       const adminsRes = await api.get("/api/admin/industry-admins");
       setIndustryAdmins(adminsRes.data || []);
     } catch (err: any) {
@@ -685,15 +659,19 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-24">
-        <p className="text-lg">Loading dashboard...</p>
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+        <p className="text-lg text-primary-foreground/80">Loading available internships...</p>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+ 
 
   const isSuperAdmin = currentUser?.user_type === 'admin';
-
   const displayedCompanies = companies.slice(0, visibleCompanies);
   const displayedMentors = mentors.slice(0, visibleMentors);
   const hasMoreCompanies = visibleCompanies < companies.length;
@@ -714,7 +692,6 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-
       <section className="pt-32 lg:pt-40 pb-8 gradient-hero">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
@@ -731,7 +708,6 @@ const Dashboard = () => {
                 Manage companies, mentors, internship applications {isSuperAdmin && "and industry admins"}
               </p>
             </motion.div>
-
             <Button
               variant="default"
               size="lg"
@@ -744,7 +720,6 @@ const Dashboard = () => {
           </div>
         </div>
       </section>
-
       <section className="py-8 -mt-8">
         <div className="container mx-auto px-4 lg:px-8">
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
@@ -767,7 +742,6 @@ const Dashboard = () => {
           </motion.div>
         </div>
       </section>
-
       <section className="py-8">
         <div className="container mx-auto px-4 lg:px-8">
           <Tabs defaultValue="companies" className="space-y-6">
@@ -791,7 +765,6 @@ const Dashboard = () => {
               )}
             </TabsList>
 
-            {/* Companies Tab - fully implemented */}
             <TabsContent value="companies" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Companies</h2>
@@ -936,7 +909,6 @@ const Dashboard = () => {
                   </DialogContent>
                 </Dialog>
               </motion.div>
-
               <div className="bg-card rounded-xl shadow-elevated overflow-hidden border border-border">
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -1007,7 +979,6 @@ const Dashboard = () => {
                   </table>
                 </div>
               </div>
-
               {hasMoreCompanies && (
                 <div className="text-center mt-8">
                   <Button variant="accent" size="lg" onClick={loadMoreCompanies}>
@@ -1017,7 +988,6 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
-            {/* Mentors Tab - fully implemented */}
             <TabsContent value="mentors" className="space-y-8">
               <motion.div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Manage Mentors</h2>
@@ -1072,7 +1042,6 @@ const Dashboard = () => {
                           Change Photo
                         </Button>
                       </div>
-
                       <div>
                         <Label>Email Address (login & notifications) *</Label>
                         <div className="relative mt-2">
@@ -1087,7 +1056,6 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <Label>First Name *</Label>
@@ -1114,7 +1082,6 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <Label>Job Title *</Label>
@@ -1133,7 +1100,6 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-
                       <div>
                         <Label>Bio</Label>
                         <Textarea
@@ -1143,7 +1109,6 @@ const Dashboard = () => {
                           rows={4}
                         />
                       </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <Label>Experience (years) *</Label>
@@ -1176,7 +1141,6 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-
                       <div>
                         <Label>Google Calendar Email (for auto Meet links)</Label>
                         <Input
@@ -1186,7 +1150,6 @@ const Dashboard = () => {
                           onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
                         />
                       </div>
-
                       <Button variant="accent" className="w-full mt-6" onClick={handleSaveMentor}>
                         {editingMentor ? "Update Mentor" : "Add Mentor"}
                       </Button>
@@ -1194,14 +1157,12 @@ const Dashboard = () => {
                   </DialogContent>
                 </Dialog>
               </motion.div>
-
               <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {displayedMentors.map((mentor, index) => {
                   const fullName = getFullName(mentor);
                   const bioText = mentor.bio || "Dedicated mentor committed to your career success.";
                   const isLongBio = bioText.length > 30;
                   const truncatedBio = isLongBio ? bioText.substring(0, 30) + "..." : bioText;
-
                   return (
                     <motion.div
                       key={mentor.id}
@@ -1242,7 +1203,6 @@ const Dashboard = () => {
                             </span>
                           </div>
                         </div>
-
                         <div className="p-6">
                           <div className="mb-4">
                             <div className="flex items-start justify-between">
@@ -1262,7 +1222,6 @@ const Dashboard = () => {
                               </div>
                             </div>
                           </div>
-
                           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-4">
                             <span className="flex items-center gap-1.5 bg-secondary px-3 py-1 rounded-full">
                               <Award className="w-3.5 h-3.5 text-primary" />
@@ -1273,7 +1232,6 @@ const Dashboard = () => {
                               {mentor.experience}+ yrs
                             </span>
                           </div>
-
                           <div className="mb-6">
                             <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2 min-h-[3rem]">
                               {truncatedBio}
@@ -1292,7 +1250,6 @@ const Dashboard = () => {
                               </Button>
                             )}
                           </div>
-
                           <div className="mb-4 text-center">
                             <p className="text-sm text-muted-foreground">Session Fee</p>
                             <p className="text-3xl font-bold text-accent">
@@ -1305,7 +1262,6 @@ const Dashboard = () => {
                   );
                 })}
               </motion.div>
-
               {hasMoreMentors && (
                 <div className="text-center mt-8">
                   <Button variant="accent" size="lg" onClick={loadMoreMentors}>
@@ -1315,11 +1271,9 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
-            {/* Bookings Tab */}
             <TabsContent value="bookings" className="space-y-8">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-2xl font-bold">Internship Applications by Industry</h2>
-
                 <div className="relative w-full md:w-80">
                   <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -1333,7 +1287,6 @@ const Dashboard = () => {
                   />
                 </div>
               </motion.div>
-
               {visibleGroupedBookings.length === 0 ? (
                 <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-16">
                   <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
@@ -1355,7 +1308,6 @@ const Dashboard = () => {
                           <span className="ml-1 text-yellow-600 font-medium">{group.pending}</span> pending
                         </div>
                       </div>
-
                       <div className="bg-card rounded-xl shadow-soft border border-border overflow-hidden">
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-max">
@@ -1428,7 +1380,6 @@ const Dashboard = () => {
                       </div>
                     </div>
                   ))}
-
                   {visibleIndustryCount < filteredCount && (
                     <div className="text-center mt-12">
                       <Button variant="accent" size="lg" onClick={loadMoreIndustries} className="px-10">
@@ -1440,7 +1391,6 @@ const Dashboard = () => {
               )}
             </TabsContent>
 
-            {/* Availability Tab */}
             <TabsContent value="availability" className="space-y-8">
               <div>
                 <div className="flex items-center justify-between mb-6">
@@ -1449,7 +1399,6 @@ const Dashboard = () => {
                     Set recurring availability slots for mentors
                   </p>
                 </div>
-
                 {mentors.length === 0 ? (
                   <div className="text-center py-16 bg-muted/30 rounded-xl border border-border">
                     <CalendarIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -1489,7 +1438,6 @@ const Dashboard = () => {
                               <p className="text-sm text-muted-foreground">{mentor.title}</p>
                             </div>
                           </div>
-
                           <Button
                             variant="outline"
                             size="sm"
@@ -1499,7 +1447,6 @@ const Dashboard = () => {
                             Set Schedule
                           </Button>
                         </div>
-
                         <div className="text-sm text-muted-foreground mt-2">
                           No schedule configured yet
                         </div>
@@ -1510,7 +1457,6 @@ const Dashboard = () => {
               </div>
             </TabsContent>
 
-            {/* Admins Tab - with exclusive assignment & edit support */}
             {isSuperAdmin && (
               <TabsContent value="admins" className="space-y-8">
                 <motion.div className="flex items-center justify-between">
@@ -1523,7 +1469,6 @@ const Dashboard = () => {
                     <Plus className="h-4 w-4 mr-2" /> Create Intern Admin
                   </Button>
                 </motion.div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {industryAdmins.length === 0 ? (
                     <div className="col-span-full text-center py-12 bg-muted/30 rounded-xl border border-border">
@@ -1548,7 +1493,6 @@ const Dashboard = () => {
                           </div>
                           <Shield className="h-5 w-5 text-primary mt-1" />
                         </div>
-
                         <div className="flex flex-wrap gap-2 mb-4">
                           {admin.industries.length === 0 ? (
                             <span className="text-sm text-muted-foreground italic">
@@ -1562,7 +1506,6 @@ const Dashboard = () => {
                             ))
                           )}
                         </div>
-
                         <Button
                           variant="outline"
                           size="sm"
@@ -1582,7 +1525,6 @@ const Dashboard = () => {
                     ))
                   )}
                 </div>
-
                 <Dialog open={adminDialogOpen} onOpenChange={(open) => {
                   setAdminDialogOpen(open);
                   if (!open) {
@@ -1601,7 +1543,6 @@ const Dashboard = () => {
                           : "Enter email and assign industries. A set-password email will be sent."}
                       </DialogDescription>
                     </DialogHeader>
-
                     <div className="space-y-6 py-4">
                       {!editingAdminId && (
                         <div>
@@ -1615,7 +1556,6 @@ const Dashboard = () => {
                           />
                         </div>
                       )}
-
                       <div>
                         <Label>Assigned Industries *</Label>
                         <Select
@@ -1639,7 +1579,6 @@ const Dashboard = () => {
                             ))}
                           </SelectContent>
                         </Select>
-
                         <div className="mt-3 flex flex-wrap gap-2">
                           {adminForm.industries.map(ind => (
                             <div
@@ -1665,7 +1604,6 @@ const Dashboard = () => {
                           )}
                         </div>
                       </div>
-
                       <Button
                         className="w-full"
                         onClick={editingAdminId ? handleUpdateIndustryAdmin : handleCreateIndustryAdmin}
@@ -1857,7 +1795,6 @@ const Dashboard = () => {
                 Change Photo
               </Button>
             </div>
-
             <div>
               <Label>Email Address (login & notifications) *</Label>
               <div className="relative mt-2">
@@ -1872,7 +1809,6 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>First Name *</Label>
@@ -1899,7 +1835,6 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Job Title *</Label>
@@ -1918,7 +1853,6 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-
             <div>
               <Label>Bio</Label>
               <Textarea
@@ -1928,7 +1862,6 @@ const Dashboard = () => {
                 rows={4}
               />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label>Experience (years) *</Label>
@@ -1961,7 +1894,6 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-
             <div>
               <Label>Google Calendar Email (for auto Meet links)</Label>
               <Input
@@ -1971,7 +1903,6 @@ const Dashboard = () => {
                 onChange={(e) => setMentorForm({ ...mentorForm, google_calendar_email: e.target.value })}
               />
             </div>
-
             <Button variant="accent" className="w-full mt-6" onClick={handleSaveMentor}>
               {editingMentor ? "Update Mentor" : "Add Mentor"}
             </Button>
@@ -1991,7 +1922,6 @@ const Dashboard = () => {
               Define recurring weekly availability slots for this mentor.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-6 py-4">
             <div>
               <Label className="mb-3 block">Select Days</Label>
@@ -2019,7 +1949,6 @@ const Dashboard = () => {
                   );
                 })}
               </div>
-
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -2051,7 +1980,6 @@ const Dashboard = () => {
                 </Button>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Start Time</Label>
@@ -2061,7 +1989,6 @@ const Dashboard = () => {
                   onChange={(e) => setAvailabilityForm(prev => ({ ...prev, start_time: e.target.value }))}
                 />
               </div>
-
               <div>
                 <Label>End Time</Label>
                 <Input
@@ -2071,7 +1998,6 @@ const Dashboard = () => {
                 />
               </div>
             </div>
-
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button
                 variant="outline"
@@ -2145,7 +2071,6 @@ const Dashboard = () => {
                 : "Enter email and assign industries. A set-password email will be sent."}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-6 py-4">
             {!editingAdminId && (
               <div>
@@ -2159,7 +2084,6 @@ const Dashboard = () => {
                 />
               </div>
             )}
-
             <div>
               <Label>Assigned Industries *</Label>
               <Select
@@ -2183,7 +2107,6 @@ const Dashboard = () => {
                   ))}
                 </SelectContent>
               </Select>
-
               <div className="mt-3 flex flex-wrap gap-2">
                 {adminForm.industries.map(ind => (
                   <div
@@ -2209,7 +2132,6 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
-
             <Button
               className="w-full"
               onClick={editingAdminId ? handleUpdateIndustryAdmin : handleCreateIndustryAdmin}

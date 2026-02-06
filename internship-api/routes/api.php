@@ -38,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', fn(Request $request) => $request->user());
     Route::post('/logout', [AuthController::class, 'logout']);
 
+
     Route::apiResource('companies', CompanyController::class);
 
     // Mentor-related protected routes
@@ -123,3 +124,11 @@ Route::middleware('auth:sanctum')->get('/admin/industry-admins', [AdminControlle
 
 
 Route::middleware('auth:sanctum')->get('/notifications/count', [NotificationController::class, 'getUnreadCount']);
+
+// Inside the auth:sanctum protected group
+Route::middleware('auth:sanctum')->prefix('student')->group(function () {
+    Route::get('/profile', [AuthController::class, 'profile']);
+    Route::post('/profile', [AuthController::class, 'updateProfile']);
+    Route::get('/internships', [BookingController::class, 'studentApplications']);
+    Route::get('/mentorships', [MentorBookingController::class, 'studentBookings']);
+});

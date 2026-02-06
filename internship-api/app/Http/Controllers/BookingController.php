@@ -20,18 +20,18 @@ class BookingController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'company_id'     => 'required|exists:companies,id',
-            'student_name'   => 'required|string|max:255',
-            'student_email'  => 'required|email|max:255',
-            'student_phone'  => 'required|string|max:20',
-            'student_id'     => 'required|string|max:50',
-            'university'     => 'required|string|max:255',
-            'cv'             => 'required|mimes:pdf|max:10000', // 10MB max
+            'company_id'      => 'required|exists:companies,id',
+            'first_name'      => 'required|string|max:100',
+            'last_name'       => 'required|string|max:100',
+            'student_email'   => 'required|email|max:255',
+            'student_phone'   => 'required|string|max:20',
+            'university'      => 'required|string|max:255',
+            'cv'              => 'required|mimes:pdf|max:10000',
+            'has_disability'  => 'required|boolean',   // ← was nullable before, now required
         ]);
 
         $company = Company::findOrFail($data['company_id']);
 
-        // NEW: Block if applications are closed for this company
         if (!$company->applications_open) {
             return response()->json([
                 'message' => 'Applications are currently closed for this company.'
@@ -44,18 +44,21 @@ class BookingController extends Controller
             ], 400);
         }
 
-        // Store CV in storage/app/public/cvs
         $cvPath = $request->file('cv')->store('cvs', 'public');
+
+        $fullName = trim("{$data['first_name']} {$data['last_name']}");
 
         $booking = Booking::create([
             'company_id'      => $data['company_id'],
-            'student_name'    => $data['student_name'],
+            'first_name'      => $data['first_name'],
+            'last_name'       => $data['last_name'],
+            'student_name'    => $fullName,
             'student_email'   => $data['student_email'],
             'student_phone'   => $data['student_phone'],
-            'student_id'      => $data['student_id'],
             'university'      => $data['university'],
             'cv_path'         => $cvPath,
             'status'          => 'pending',
+            'has_disability'  => $data['has_disability'],
         ]);
 
         return response()->json([
@@ -63,7 +66,6 @@ class BookingController extends Controller
             'booking' => $booking->load('company')
         ], 201);
     }
-
     /**
      * Get all bookings grouped by industry (for admin dashboard)
      */
@@ -257,5 +259,27 @@ class BookingController extends Controller
             'bookings' => $formattedBookings,
             'stats'    => $stats,
         ]);
+    }
+
+    public function studentApplications(Request $request)
+    {
+        $user = $request->user();
+
+        $bookings = Booking::where('student_email', $user->email)
+            ->with('company')
+            ->latest()
+            ->get()
+            ->map(function ($booking) {
+                return [
+                    'id' => $booking->id,
+                    'company' => $booking->company,
+                    'applied_at' => $booking->created_at,
+                    'status' => $booking->status,
+                    'payment_status' => $booking->status === 'paid' ? 'Paid' : 'Not Paid',
+                    'cv_path' => $booking->cv_path ? asset('storage/' . $booking->cv_path) : null,
+                ];
+            });
+
+        return response()->json($bookings);
     }
 }

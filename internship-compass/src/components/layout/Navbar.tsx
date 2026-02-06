@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, LogOut, Shield, UserCircle, ChevronDown, Bell } from "lucide-react";
+import { Menu, X, LogOut, UserCircle, ChevronDown, Bell } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,15 +34,13 @@ export const Navbar = () => {
 
   // Scroll detection
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 80);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 80);
     window.addEventListener("scroll", handleScroll);
-    handleScroll(); 
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // User loading & dropdown outside click
+  // Load user & dropdown outside click
   useEffect(() => {
     const loadUser = () => {
       try {
@@ -50,10 +48,9 @@ export const Navbar = () => {
         if (!stored || stored === "null" || stored === "undefined") {
           setUser(null);
         } else {
-          const parsed = JSON.parse(stored);
-          setUser(parsed);
+          setUser(JSON.parse(stored));
         }
-      } catch (error) {
+      } catch {
         localStorage.removeItem("user");
         setUser(null);
       }
@@ -75,18 +72,15 @@ export const Navbar = () => {
     };
   }, []);
 
-  // Notifications
+  // Notification count
   useEffect(() => {
-    if (!user) {
-      setNotificationCount(0);
-      return;
-    }
+    if (!user) return;
 
     const fetchNotifications = async () => {
       try {
         const res = await api.get("/api/notifications/count");
         setNotificationCount(res.data.unread || 0);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to fetch notifications:", err);
       }
     };
@@ -97,23 +91,57 @@ export const Navbar = () => {
   }, [user]);
 
   const userType = user?.user_type?.toString().toLowerCase().trim() || "";
+  const isLoggedIn = !!user;
+
   const isAdmin = userType === "admin";
   const isMentor = userType === "mentor";
   const isIndustryAdmin = userType === "industry_admin";
-  const isLoggedIn = !!user;
-  
-  // Logic to determine if user is a specialized role
-  const isSpecialRole = isAdmin || isMentor || isIndustryAdmin;
+  const isStudent = userType === "user";
+
+  const userName = user?.first_name || user?.email?.split('@')[0] || "User";
+  const userRoleDisplay = isAdmin
+    ? "Administrator"
+    : isMentor
+    ? "Mentor"
+    : isIndustryAdmin
+    ? "Industry Admin"
+    : "Student";
+
+  const isDarkSection = !isScrolled;
+
+  // Only show dashboard link in main nav for admin/mentor/industry admin
+  const dashboardLink = (() => {
+    if (isAdmin) return { label: "Admin Dashboard", href: "/dashboard" };
+    if (isMentor) return { label: "Mentor Dashboard", href: "/mentor/dashboard" };
+    if (isIndustryAdmin) return { label: "Industry Dashboard", href: "/industry-admin/dashboard" };
+    return null;
+  })();
 
   const handleLogout = async () => {
     try {
-      const redirectPath = await auth.logout();
+      await auth.logout();
+
       setUser(null);
       setIsOpen(false);
       setIsDropdownOpen(false);
-      navigate(redirectPath);
+
+      // Role-based redirect
+      if (isStudent) {
+        navigate("/auth");
+      } else if (isMentor) {
+        navigate("/mentor/auth");
+      } else if (isAdmin) {
+        navigate("/admin/auth");
+      } else if (isIndustryAdmin) {
+        navigate("/industryadmin/auth");
+      } else {
+        navigate("/auth");
+      }
+
+      toast.success("Logged out successfully");
     } catch (err) {
       console.error("Logout failed", err);
+      toast.error("Logout failed");
       navigate("/auth");
     }
   };
@@ -122,21 +150,6 @@ export const Navbar = () => {
     if (href === "/") return location.pathname === "/";
     return location.pathname.startsWith(href);
   };
-
-  const userName = user?.first_name || user?.email?.split('@')[0] || "User";
-  const userRoleDisplay = isAdmin ? "Administrator" : isMentor ? "Mentor" : isIndustryAdmin ? "Industry Admin" : "Student";
-
-  const isDarkSection = !isScrolled;
-
-  // ─── Role-Based Link Logic ───
-  const getDashboardLink = () => {
-    if (isAdmin) return { label: "Admin Dashboard", href: "/dashboard" };
-    if (isMentor) return { label: "Mentor Dashboard", href: "/mentor/dashboard" };
-    if (isIndustryAdmin) return { label: "Industry Dashboard", href: "/industry-admin/dashboard" };
-    return null;
-  };
-
-  const dashboardLink = getDashboardLink();
 
   return (
     <motion.nav
@@ -165,8 +178,7 @@ export const Navbar = () => {
 
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center gap-2">
-            {isSpecialRole && dashboardLink ? (
-              // Show ONLY Dashboard link for special roles
+            {dashboardLink && (
               <Link
                 to={dashboardLink.href}
                 className={cn(
@@ -178,8 +190,9 @@ export const Navbar = () => {
               >
                 {dashboardLink.label}
               </Link>
-            ) : (
-              // Show standard links for normal users/guests
+            )}
+
+            {!dashboardLink &&
               navLinks.map((link) => (
                 <Link
                   key={link.label}
@@ -193,8 +206,7 @@ export const Navbar = () => {
                 >
                   {link.label}
                 </Link>
-              ))
-            )}
+              ))}
           </div>
 
           {/* Desktop Right Side */}
@@ -245,6 +257,19 @@ export const Navbar = () => {
                             <p className="font-semibold">{userName}</p>
                             <p className={cn("text-xs", isDarkSection ? "text-white/70" : "text-gray-500")}>{userRoleDisplay}</p>
                           </div>
+
+                          {/* "Your Dashboard" only for students – inside dropdown */}
+                          {isStudent && (
+                            <Link
+                              to="/student/dashboard"
+                              className="block px-4 py-3 text-sm hover:bg-accent/10 transition-colors"
+                              onClick={() => setIsDropdownOpen(false)}
+                            >
+                              Your Dashboard
+                            </Link>
+                          )}
+
+                          {/* Logout */}
                           <button
                             onClick={handleLogout}
                             className={cn(
@@ -268,6 +293,7 @@ export const Navbar = () => {
             )}
           </div>
 
+          {/* Mobile Toggle */}
           <button
             onClick={() => setIsOpen(!isOpen)}
             className={cn("lg:hidden p-2 rounded-lg", isDarkSection ? "text-white" : "text-gray-800")}
@@ -287,32 +313,37 @@ export const Navbar = () => {
             className={cn("lg:hidden border-t", isDarkSection ? "bg-black/90 border-white/10" : "bg-white border-gray-200")}
           >
             <div className="container mx-auto px-4 py-6 space-y-4">
-              {/* Conditional Mobile Links */}
-              {isSpecialRole && dashboardLink ? (
+              {navLinks.map((link) => (
                 <Link
-                  to={dashboardLink.href}
-                  className={cn("block py-3 px-4 rounded-lg font-medium", isActive(dashboardLink.href) ? "bg-[#ff5722] text-white" : "text-gray-400")}
+                  key={link.label}
+                  to={link.href}
+                  className={cn(
+                    "block py-3 px-4 rounded-lg font-medium",
+                    isActive(link.href) ? "bg-[#ff5722] text-white" : "text-gray-600"
+                  )}
                   onClick={() => setIsOpen(false)}
                 >
-                  {dashboardLink.label}
+                  {link.label}
                 </Link>
-              ) : (
-                navLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    to={link.href}
-                    className={cn("block py-3 px-4 rounded-lg font-medium", isActive(link.href) ? "bg-[#ff5722] text-white" : "text-gray-400")}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {link.label}
-                  </Link>
-                ))
-              )}
-              
+              ))}
+
               {isLoggedIn && (
-                <Button variant="destructive" className="w-full" onClick={handleLogout}>
-                  Logout
-                </Button>
+                <>
+                  {/* Mobile: Your Dashboard for students */}
+                  {isStudent && (
+                    <Link
+                      to="/student/dashboard"
+                      className="block py-3 px-4 rounded-lg font-medium text-gray-600"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Your Dashboard
+                    </Link>
+                  )}
+
+                  <Button variant="destructive" className="w-full" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </>
               )}
             </div>
           </motion.div>

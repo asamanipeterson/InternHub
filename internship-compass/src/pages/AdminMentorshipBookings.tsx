@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { ArrowLeft, Calendar, Clock, Video, User, School, BookOpen, Layers } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Video, User, BookOpen, DollarSign, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useNavigate } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface MentorshipBooking {
   id: string;
@@ -21,33 +31,63 @@ interface MentorshipBooking {
   google_meet_link: string | null;
   created_at: string;
   mentor: {
-    name: string | null;      // Added this
+    name: string | null;
     title: string;
     user?: {
-      name: string | null;    // Added this
+      name: string | null;
       first_name: string;
       last_name: string;
     }
   };
 }
 
+const CountUpStat = ({ end, suffix = "", label }: { end: number; suffix?: string; label: string }) => {
+  const countValue = useMotionValue(0);
+  const rounded = useTransform(countValue, (latest) => Math.round(latest).toLocaleString());
+
+  useEffect(() => {
+    const controls = animate(countValue, end, {
+      duration: 2.5,
+      ease: "easeOut",
+      delay: 0.5,
+    });
+    return controls.stop;
+  }, [countValue, end]);
+
+  return (
+    <div className="text-center">
+      <div className="text-3xl md:text-4xl font-bold text-accent">
+        <motion.span>{rounded}</motion.span>{suffix}
+      </div>
+      <div className="text-sm text-primary-foreground/70 mt-1">{label}</div>
+    </div>
+  );
+};
+
 const AdminMentorshipBookings = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<MentorshipBooking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forcedLoading, setForcedLoading] = useState(true);
 
   useEffect(() => {
     const fetchBookings = async () => {
+      const minimumDelay = new Promise(resolve => setTimeout(resolve, 2000));
+
       try {
         const res = await api.get('/api/admin/mentor-bookings');
-        setBookings(res.data);
+        await Promise.all([minimumDelay, Promise.resolve()]);
+        setBookings(res.data || []);
       } catch (err: any) {
         console.error("Failed to load bookings:", err);
         toast.error("Failed to load mentorship bookings");
+        await minimumDelay;
       } finally {
         setLoading(false);
+        setForcedLoading(false);
       }
     };
+
     fetchBookings();
   }, []);
 
@@ -60,95 +100,216 @@ const AdminMentorshipBookings = () => {
     };
   };
 
+  const totalBookings = bookings.length;
+  const upcoming = bookings.filter(b => new Date(b.scheduled_at) > new Date()).length;
+  const pendingPayment = bookings.filter(b => b.status?.toLowerCase().includes('pending')).length;
+
+  const totalMoneyPaid = bookings
+    .filter(b => b.status?.toLowerCase().includes('paid'))
+    .reduce((sum, booking) => sum + Number(booking.amount || 0), 0);
+
+ 
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-lg">Loading records...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+        <p className="text-lg text-primary-foreground/80">Loading available internships...</p>
+      </div>
+    </div>
+  );
+}
+  return (
+    <div className="min-h-screen bg-background relative overflow-hidden">
       <Navbar />
-      <section className="pt-32 pb-20">
-        <div className="container mx-auto px-4 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8">
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Dashboard</span>
-            </button>
 
-            <h1 className="text-4xl font-bold mb-12">Mentorship Administration</h1>
+      {/* Animated background blobs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <motion.div
+          className="absolute top-20 right-[15%] w-96 h-96 rounded-full bg-foreground blur-3xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.15, 0.4, 0.15] }}
+          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-32 left-[10%] w-80 h-80 rounded-full bg-foreground blur-3xl"
+          animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.5, 0.2] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
 
-            {bookings.length === 0 ? (
-              <div className="text-center py-20 bg-card rounded-3xl border border-dashed">
-                <p>No Records Found</p>
-              </div>
-            ) : (
-              <div className="bg-card rounded-3xl shadow-sm overflow-hidden border">
+      <div className="relative z-10">
+        {/* Hero Section */}
+        <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
+          <div className="container mx-auto px-4 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center max-w-4xl mx-auto"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.7 }}
+                className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-5"
+              >
+                Mentorship{" "}
+                <span className="relative inline-block">
+                  <span className="text-accent">Administration</span>
+                  <motion.span
+                    className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.8, delay: 0.8 }}
+                  />
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.7 }}
+                className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
+              >
+                Manage all mentorship bookings, schedules, payments, and Google Meet sessions in one place.
+              </motion.p>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Quick Stats */}
+        <div className="container mx-auto px-4 lg:px-8 py-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+              <CardContent className="pt-6 text-center">
+                <User className="w-10 h-10 mx-auto mb-4 text-accent" />
+                <CountUpStat end={totalBookings} label="Total Bookings" />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+              <CardContent className="pt-6 text-center">
+                <Calendar className="w-10 h-10 mx-auto mb-4 text-accent" />
+                <CountUpStat end={upcoming} label="Upcoming Sessions" />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+              <CardContent className="pt-6 text-center">
+                <Clock className="w-10 h-10 mx-auto mb-4 text-accent" />
+                <CountUpStat end={pendingPayment} label="Pending Actions" />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+              <CardContent className="pt-6 text-center">
+                <CountUpStat 
+                  end={totalMoneyPaid} 
+                  suffix=" GHS" 
+                  label="Total Revenue (Paid)" 
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Back Button */}
+          <Button
+            variant="ghost"
+            className="mb-8 text-muted-foreground hover:text-foreground"
+            onClick={() => navigate("/dashboard")}
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Dashboard
+          </Button>
+
+          {/* Bookings Table */}
+          {bookings.length === 0 ? (
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20">
+              <CardContent className="py-20 text-center">
+                <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-6" />
+                <h3 className="text-2xl font-semibold mb-3">No Mentorship Bookings Found</h3>
+                <p className="text-muted-foreground mb-6">No records available at the moment.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 overflow-hidden">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-2xl">All Mentorship Bookings</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px]">
-                    <thead className="bg-secondary/50 border-b">
-                      <tr>
-                        <th className="text-left p-5">Student</th>
-                        <th className="text-left p-5">Academic</th>
-                        <th className="text-left p-5">Mentor</th>
-                        <th className="text-left p-5">Schedule</th>
-                        <th className="text-left p-5">Payment</th>
-                        <th className="text-center p-5">Meet</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-border/50 bg-secondary/40 hover:bg-secondary/50">
+                        <TableHead className="p-5">Student</TableHead>
+                        <TableHead className="p-5">Academic</TableHead>
+                        <TableHead className="p-5">Mentor</TableHead>
+                        <TableHead className="p-5">Schedule</TableHead>
+                        <TableHead className="p-5">Payment</TableHead>
+                        <TableHead className="p-5 text-center">Meet</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-border/40">
                       {bookings.map((booking) => {
                         const { date, time } = formatDateTime(booking.scheduled_at);
-                        
-                        // FALLBACK LOGIC: Try mentor.name, then mentor.user.name, then manual combine
-                        const mentorDisplayName = 
-                            booking.mentor.name || 
-                            booking.mentor.user?.name || 
-                            (booking.mentor.user ? `${booking.mentor.user.first_name} ${booking.mentor.user.last_name}` : 'Unknown Mentor');
+                        const mentorDisplayName =
+                          booking.mentor.name ||
+                          booking.mentor.user?.name ||
+                          (booking.mentor.user ? `${booking.mentor.user.first_name} ${booking.mentor.user.last_name}` : 'Unknown Mentor');
 
                         return (
-                          <tr key={booking.id} className="hover:bg-secondary/30 transition-colors">
-                            <td className="p-5">
-                              <p className="font-bold">{booking.student_name}</p>
-                              <p className="text-xs text-muted-foreground">{booking.student_email}</p>
-                            </td>
-                            <td className="p-5">
-                              <p className="text-sm">{booking.student_institution}</p>
-                              <p className="text-xs font-medium uppercase text-muted-foreground">Level {booking.student_level}</p>
-                            </td>
-                            <td className="p-5">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-primary">{mentorDisplayName}</span>
-                                <span className="text-xs text-muted-foreground">{booking.mentor.title}</span>
+                          <TableRow key={booking.id} className="hover:bg-secondary/60 transition-colors">
+                            <TableCell className="p-5">
+                              <div className="font-semibold">{booking.student_name}</div>
+                              <div className="text-sm text-muted-foreground mt-0.5">{booking.student_email}</div>
+                            </TableCell>
+                            <TableCell className="p-5">
+                              <div className="text-sm">{booking.student_institution || '—'}</div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Level {booking.student_level || 'N/A'}
                               </div>
-                            </td>
-                            <td className="p-5 text-sm">
+                            </TableCell>
+                            <TableCell className="p-5">
+                              <div className="font-semibold text-primary">{mentorDisplayName}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{booking.mentor.title || 'Mentor'}</div>
+                            </TableCell>
+                            <TableCell className="p-5 text-sm">
                               <div className="font-medium">{date}</div>
                               <div className="text-xs text-muted-foreground">{time} GMT</div>
-                            </td>
-                            <td className="p-5">
-                              <span className="font-bold">GHS {Number(booking.amount).toFixed(2)}</span>
-                            </td>
-                            <td className="p-5 text-center">
+                            </TableCell>
+                            <TableCell className="p-5">
+                              <span className="font-semibold text-accent">
+                                GHS {Number(booking.amount).toFixed(2)}
+                              </span>
+                              {booking.status?.toLowerCase().includes('paid') && (
+                                <span className="ml-2 text-xs text-green-500">✓ Paid</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="p-5 text-center">
                               {booking.google_meet_link ? (
-                                <a href={booking.google_meet_link} target="_blank" className="text-accent hover:underline text-sm font-medium">Join Meet</a>
-                              ) : <span className="text-xs text-muted-foreground italic">Pending</span>}
-                            </td>
-                          </tr>
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={booking.google_meet_link} target="_blank" rel="noopener noreferrer">
+                                    <Video className="w-4 h-4 mr-2" />
+                                    Join
+                                  </a>
+                                </Button>
+                              ) : (
+                                <Badge variant="secondary">Pending</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
-              </div>
-            )}
-          </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
-      </section>
+      </div>
+
       <Footer />
     </div>
   );

@@ -9,7 +9,7 @@ import api from "@/lib/api";
 const VerifyOtp = () => {
   const navigate = useNavigate();
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<HTMLInputElement[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null); // ← store interval ID
@@ -21,7 +21,7 @@ const VerifyOtp = () => {
       clearInterval(timerRef.current);
     }
 
-    setTimeLeft(30);
+    setTimeLeft(60);
     setCanResend(false);
 
     timerRef.current = setInterval(() => {
@@ -93,7 +93,7 @@ const VerifyOtp = () => {
       localStorage.setItem("token", token);
       window.dispatchEvent(new Event("userUpdated"));
 
-      toast.success(`Login successful! Welcome back, ${user.name || user.email}.`);
+      toast.success(`Login successful! Welcome back, ${user.first_name || user.email.split('@')[0] || 'User'}.`);
 
       const userType = user.user_type?.toString().toLowerCase().trim() ?? "";
 
@@ -104,7 +104,7 @@ const VerifyOtp = () => {
       } else if (userType === "industry_admin") {
         navigate("/industry-admin/dashboard", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        navigate("/student/dashboard", { replace: true });
       }
     } catch (err: any) {
       const message = err.response?.data?.message || "Invalid or expired code";
@@ -137,7 +137,7 @@ const VerifyOtp = () => {
     }
   };
 
-  const seconds = timeLeft % 30;
+  const seconds = timeLeft % 60;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

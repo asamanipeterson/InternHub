@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, XCircle } from "lucide-react";
+import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, XCircle, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import { Link } from "react-router-dom";
 
@@ -31,7 +31,7 @@ interface Company {
   available_slots: number;
   is_paid: boolean;
   requirements: string | null;
-  applications_open: boolean; // ← NEW: controls apply button
+  applications_open: boolean;
 }
 
 const ITEMS_PER_PAGE = 9;
@@ -53,6 +53,7 @@ const itemVariants = {
 const Internships = () => {
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forcedLoading, setForcedLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState("all");
@@ -64,19 +65,23 @@ const Internships = () => {
   const [currentDescriptionCompany, setCurrentDescriptionCompany] = useState<Company | null>(null);
 
   const [formData, setFormData] = useState({
-    studentName: "",
+    firstName: "",
+    lastName: "",
     studentEmail: "",
     studentPhone: "",
-    studentId: "",
     university: "",
     cv: null as File | null,
+    hasDisability: null as boolean | null,
   });
 
   useEffect(() => {
     const fetchCompanies = async () => {
+      const minimumDelay = new Promise(resolve => setTimeout(resolve, 2000));
+
       try {
         const res = await api.get("/api/companies");
-        setAllCompanies(res.data);
+        await Promise.all([minimumDelay, Promise.resolve()]);
+        setAllCompanies(res.data || []);
         setIsAuthenticated(true);
       } catch (err: any) {
         if (err.response?.status === 401 || err.response?.status === 403) {
@@ -85,8 +90,10 @@ const Internships = () => {
           toast.error("Failed to load internship opportunities");
         }
         console.error(err);
+        await minimumDelay;
       } finally {
         setLoading(false);
+        setForcedLoading(false);
       }
     };
 
@@ -122,18 +129,27 @@ const Internships = () => {
   const handleBooking = async () => {
     if (!selectedCompany) return;
 
-    if (!formData.studentName || !formData.studentEmail || !formData.studentPhone || !formData.studentId || !formData.university || !formData.cv) {
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.studentEmail ||
+      !formData.studentPhone ||
+      !formData.university ||
+      formData.hasDisability === null ||
+      !formData.cv
+    ) {
       toast.error("Please fill all fields and upload your CV");
       return;
     }
 
     const bookingData = new FormData();
     bookingData.append("company_id", selectedCompany.id);
-    bookingData.append("student_name", formData.studentName);
+    bookingData.append("first_name", formData.firstName);
+    bookingData.append("last_name", formData.lastName);
     bookingData.append("student_email", formData.studentEmail);
     bookingData.append("student_phone", formData.studentPhone);
-    bookingData.append("student_id", formData.studentId);
     bookingData.append("university", formData.university);
+    bookingData.append("has_disability", formData.hasDisability ? "1" : "0");
     bookingData.append("cv", formData.cv!);
 
     try {
@@ -143,12 +159,13 @@ const Internships = () => {
       toast.success("Application submitted! You'll receive an email after admin review.");
       setBookingOpen(false);
       setFormData({
-        studentName: "",
+        firstName: "",
+        lastName: "",
         studentEmail: "",
         studentPhone: "",
-        studentId: "",
         university: "",
         cv: null,
+        hasDisability: null,
       });
       setSelectedCompany(null);
     } catch (err: any) {
@@ -156,14 +173,40 @@ const Internships = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-lg">Loading internship opportunities...</p>
-      </div>
-    );
-  }
+ //     if (loading) {
+//   return (
+//     <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center">
+//       <div className="absolute inset-0 pointer-events-none">
+//         <motion.div
+//           className="absolute top-1/3 right-1/4 w-64 h-64 rounded-full bg-accent/20 blur-3xl"
+//           animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.6, 0.3] }}
+//           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+//         />
+//         <motion.div
+//           className="absolute bottom-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/10 blur-3xl"
+//           animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.5, 0.2] }}
+//           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+//         />
+//       </div>
 
+//       <div className="relative z-10 text-center">
+//         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-accent mx-auto mb-6"></div>
+//         <p className="text-xl font-medium text-foreground">Loading available internships...</p>
+//       </div>
+//     </div>
+//   );
+// }
+
+  if (loading) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+        <p className="text-lg text-primary-foreground/80">Loading available internships...</p>
+      </div>
+    </div>
+  );
+}
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -428,14 +471,27 @@ const Internships = () => {
 
                             <div className="space-y-4 mt-4">
                               <div>
-                                <Label htmlFor="name">Full Name *</Label>
+                                <Label htmlFor="firstName">First Name *</Label>
                                 <Input
-                                  id="name"
-                                  value={formData.studentName}
-                                  onChange={(e) => setFormData({ ...formData, studentName: e.target.value })}
-                                  placeholder="John Doe"
+                                  id="firstName"
+                                  value={formData.firstName}
+                                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                                  placeholder="John"
+                                  required
                                 />
                               </div>
+
+                              <div>
+                                <Label htmlFor="lastName">Last (Surname) Name *</Label>
+                                <Input
+                                  id="lastName"
+                                  value={formData.lastName}
+                                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                  placeholder="Doe"
+                                  required
+                                />
+                              </div>
+
                               <div>
                                 <Label htmlFor="email">Email Address *</Label>
                                 <Input
@@ -444,8 +500,10 @@ const Internships = () => {
                                   value={formData.studentEmail}
                                   onChange={(e) => setFormData({ ...formData, studentEmail: e.target.value })}
                                   placeholder="john@example.com"
+                                  required
                                 />
                               </div>
+
                               <div>
                                 <Label htmlFor="phone">Phone Number *</Label>
                                 <Input
@@ -453,26 +511,55 @@ const Internships = () => {
                                   value={formData.studentPhone}
                                   onChange={(e) => setFormData({ ...formData, studentPhone: e.target.value })}
                                   placeholder="+233 123 456 789"
+                                  required
                                 />
                               </div>
-                              <div>
-                                <Label htmlFor="studentId">Student ID *</Label>
-                                <Input
-                                  id="studentId"
-                                  value={formData.studentId}
-                                  onChange={(e) => setFormData({ ...formData, studentId: e.target.value })}
-                                  placeholder="e.g., S123456"
-                                />
+
+                              <div className="space-y-2">
+                                <Label>Do you have a disability? *</Label>
+                                <div className="flex items-center space-x-8 pt-1">
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="disability-yes"
+                                      name="has_disability"
+                                      checked={formData.hasDisability === true}
+                                      onChange={() => setFormData({ ...formData, hasDisability: true })}
+                                      className="h-4 w-4 border-gray-300 text-accent focus:ring-accent"
+                                      required
+                                    />
+                                    <Label htmlFor="disability-yes" className="text-sm font-medium cursor-pointer">
+                                      Yes
+                                    </Label>
+                                  </div>
+
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="radio"
+                                      id="disability-no"
+                                      name="has_disability"
+                                      checked={formData.hasDisability === false}
+                                      onChange={() => setFormData({ ...formData, hasDisability: false })}
+                                      className="h-4 w-4 border-gray-300 text-accent focus:ring-accent"
+                                    />
+                                    <Label htmlFor="disability-no" className="text-sm font-medium cursor-pointer">
+                                      No
+                                    </Label>
+                                  </div>
+                                </div>
                               </div>
+
                               <div>
-                                <Label htmlFor="university">University/Institution *</Label>
+                                <Label htmlFor="university">Institution / University *</Label>
                                 <Input
                                   id="university"
                                   value={formData.university}
                                   onChange={(e) => setFormData({ ...formData, university: e.target.value })}
-                                  placeholder="University of Ghana"
+                                  placeholder="University of Ghana / KNUST / UCC ..."
+                                  required
                                 />
                               </div>
+
                               <div>
                                 <Label htmlFor="cv">Upload CV (PDF only) *</Label>
                                 <Input
@@ -480,15 +567,16 @@ const Internships = () => {
                                   type="file"
                                   accept=".pdf"
                                   onChange={(e) => setFormData({ ...formData, cv: e.target.files?.[0] || null })}
+                                  required
                                 />
                                 {formData.cv && (
-                                  <p className="text-sm text-muted-foreground mt-1">
+                                  <p className="text-sm text-muted-foreground mt-1.5">
                                     Selected: {formData.cv.name}
                                   </p>
                                 )}
                               </div>
 
-                              <Button variant="accent" className="w-full" onClick={handleBooking}>
+                              <Button variant="accent" className="w-full mt-2" onClick={handleBooking}>
                                 Submit Application
                               </Button>
                             </div>
@@ -554,7 +642,7 @@ const Internships = () => {
                         : "text-red-600 font-medium"
                     }
                   >
-                    {currentDescriptionCompany?.is_paid ? "PaidInternship" : "UnpaidInternship"}
+                    {currentDescriptionCompany?.is_paid ? "Paid Internship" : "Unpaid Internship"}
                   </span>
                 </DialogDescription>
               </DialogHeader>

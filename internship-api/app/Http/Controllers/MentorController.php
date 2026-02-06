@@ -79,6 +79,29 @@ class MentorController extends Controller
             return response()->json(['message' => 'Mentor not found'], 404);
         }
 
+        $tokenStatus = 'valid';
+
+        // If a refresh token exists, verify it's actually working
+        if (!empty($mentor->google_refresh_token)) {
+            $client = new GoogleClient();
+            $client->setClientId(config('services.google.client_id'));
+            $client->setClientSecret(config('services.google.client_secret'));
+
+            try {
+                // Attempt to fetch a new access token using the stored refresh token
+                $newToken = $client->fetchAccessTokenWithRefreshToken($mentor->google_refresh_token);
+
+                if (isset($newToken['error'])) {
+                    $tokenStatus = 'invalid';
+                    Log::warning("Mentor ID {$mentor->id} has an invalid Google token: " . ($newToken['error_description'] ?? $newToken['error']));
+                }
+            } catch (\Exception $e) {
+                $tokenStatus = 'invalid';
+            }
+        } else {
+            $tokenStatus = 'unconnected';
+        }
+
         return response()->json([
             'id'                  => $mentor->id,
             'uuid'                => $mentor->uuid,
@@ -88,6 +111,7 @@ class MentorController extends Controller
             'last_name'           => $mentor->user->last_name,
             'title'               => $mentor->title,
             'is_google_connected' => !empty($mentor->google_refresh_token),
+            'google_token_status' => $tokenStatus, // <--- The frontend now uses this flag
         ]);
     }
 
@@ -104,7 +128,7 @@ class MentorController extends Controller
         $client->setRedirectUri(config('services.google.redirect'));
         $client->addScope(GoogleCalendar::CALENDAR_EVENTS);
         $client->setAccessType('offline');
-        $client->setPrompt('consent');
+        $client->setPrompt('consent select_account');
         $client->setState((string) $mentor->id);
 
         return response()->json(['url' => $client->createAuthUrl()]);

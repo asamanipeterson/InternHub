@@ -18,9 +18,11 @@ class Booking extends Model
     protected $fillable = [
         'company_id',
         'student_name',
+        'first_name',           // new
+        'last_name',
         'student_email',
         'student_phone',
-        'student_id',
+        // 'student_id',
         'university',
         'cv_path',
         'status',
@@ -30,6 +32,7 @@ class Booking extends Model
         'currency',
         'rejection_reason',
         'expires_at',
+        'has_disability',
     ];
 
     /**
@@ -39,7 +42,8 @@ class Booking extends Model
      */
     protected $casts = [
         'expires_at' => 'datetime',
-        'amount'     => 'integer', // ensures it's stored/retrieved as int
+        'amount'     => 'integer',
+        'has_disability' => 'boolean',
     ];
 
     /**
@@ -115,5 +119,28 @@ class Booking extends Model
     public function scopeExpired($query)
     {
         return $query->where('status', 'expired');
+    }
+
+    public function getFirstNameAttribute($value)
+    {
+        return $value ?? $this->getFirstNameFromStudentName();
+    }
+
+    public function getLastNameAttribute($value)
+    {
+        return $value ?? $this->getLastNameFromStudentName();
+    }
+
+    // Fallback logic if first/last are null but student_name exists (for old records)
+    protected function getFirstNameFromStudentName()
+    {
+        $parts = explode(' ', trim($this->student_name ?? ''), 2);
+        return $parts[0] ?? '';
+    }
+
+    protected function getLastNameFromStudentName()
+    {
+        $parts = explode(' ', trim($this->student_name ?? ''), 2);
+        return $parts[1] ?? '';
     }
 }

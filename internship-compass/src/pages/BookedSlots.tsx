@@ -80,7 +80,10 @@ const BookedSlots = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-lg">Loading booked slots...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-lg text-primary-foreground/80">Loading booked internship slots...</p>
+        </div>
       </div>
     );
   }
@@ -89,33 +92,55 @@ const BookedSlots = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
-        <div className="container mx-auto px-4 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center"
-          >
-            <h1 className="text-4xl md:text-5xl font-bold text-primary-foreground mb-4">
-              Booked Internship Slots
-            </h1>
-            <p className="text-primary-foreground/80 text-lg">
-              {bookings.length} confirmed and paid placement{bookings.length !== 1 ? 's' : ''}
-            </p>
-          </motion.div>
-        </div>
-      </section>
 
+       <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
+          <div className="container mx-auto px-4 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-center max-w-4xl mx-auto"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.7 }}
+                className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-5"
+              >
+                Booked{" "}
+                <span className="relative inline-block">
+                  <span className="text-accent">Internship Slots</span>
+                  <motion.span
+                    className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.8, delay: 0.8 }}
+                  />
+                </span>
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.7 }}
+                className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
+              >
+             {bookings.length} confirmed and paid placement{bookings.length !== 1 ? 's' : ''}
+              </motion.p>
+            </motion.div>
+          </div>
+        </section>
+      
       <section className="py-12">
-        
         <div className="container mx-auto px-4 lg:px-8">
           <button
-              onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Dashboard</span>
-            </button>
+            onClick={() => navigate("/dashboard")}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-8"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Back to Dashboard</span>
+          </button>
+
           {bookings.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
