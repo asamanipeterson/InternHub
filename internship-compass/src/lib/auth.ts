@@ -42,7 +42,7 @@ export const register = async (formData: any) => {
     phone: formData.phone,
     nationality: formData.nationality,
     gender: formData.gender,
-    date_of_birth: `${formData.dob_year}-${String(formData.dob_month).padStart(2, '0')}-${String(formData.dob_day).padStart(2, '0')}`,
+    date_of_birth: formData.date_of_birth,
     email: formData.email,
     password: formData.password,
     password_confirmation: formData.password_confirmation,
@@ -122,7 +122,7 @@ export const resendOtp = async () => {
 export const forgotPassword = async (email: string) => {
   await ensureCsrfCookie();
   const res = await api.post("/api/forgot-password", { email });
-  return res.data;
+  return res;
 };
 
 export const resetPassword = async (data: { email: string; otp: string; password: string; password_confirmation: string }) => {

@@ -959,11 +959,7 @@ const Mentorship = () => {
             <DialogTitle className="pr-10 text-2xl">
               {selectedBioMentor ? getFullName(selectedBioMentor) : "Mentor"} - Full Bio
             </DialogTitle>
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="absolute right-2 top-2">
-                <X className="h-5 w-5" />
-              </Button>
-            </DialogClose>
+           
           </DialogHeader>
           <div className="mt-2 text-muted-foreground leading-relaxed whitespace-pre-wrap text-base">
             {selectedBioMentor?.bio || "No detailed bio available for this mentor."}

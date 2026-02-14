@@ -42,6 +42,8 @@ class Booking extends Model
      */
     protected $casts = [
         'expires_at' => 'datetime',
+        'created_at' => 'datetime:Y-m-d\TH:i:sP', // Standard ISO 8601
+        'updated_at' => 'datetime:Y-m-d\TH:i:sP',
         'amount'     => 'integer',
         'has_disability' => 'boolean',
     ];

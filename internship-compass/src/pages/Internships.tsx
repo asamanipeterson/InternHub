@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, XCircle, Sparkles } from "lucide-react";
+import { MapPin, Briefcase, Users, Search, Filter, ChevronRight, LogIn, XCircle, Sparkles, Info } from "lucide-react";
 import api from "@/lib/api";
 import { Link } from "react-router-dom";
 
@@ -35,7 +35,7 @@ interface Company {
 }
 
 const ITEMS_PER_PAGE = 9;
-const REFRESH_INTERVAL = 25000;
+const REFRESH_INTERVAL = 5000;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -73,6 +73,17 @@ const Internships = () => {
     cv: null as File | null,
     hasDisability: null as boolean | null,
   });
+
+  // Effect to show info toast when loader is active
+  useEffect(() => {
+    if (forcedLoading) {
+      toast.info("Process Note", {
+        description: "You'll need to upload your CV when applying and Once your internship application is approved by the company, you will be required to make a payment to confirm and book your slot.",
+        duration: 8000,
+        icon: <Info className="h-5 w-5 text-blue-500" />,
+      });
+    }
+  }, [forcedLoading]);
 
   useEffect(() => {
     const fetchCompanies = async () => {
@@ -119,7 +130,13 @@ const Internships = () => {
   const displayedCompanies = filteredCompanies.slice(0, visibleCount);
   const hasMore = visibleCount < filteredCompanies.length;
 
-  const loadMore = () => setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
+  const loadMore = async () => {
+    setLoading(true);
+    // Mimic the load delay used in the initial fetch
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setVisibleCount((prev) => prev + ITEMS_PER_PAGE);
+    setLoading(false);
+  };
 
   const openDescriptionModal = (company: Company) => {
     setCurrentDescriptionCompany(company);
@@ -173,31 +190,7 @@ const Internships = () => {
     }
   };
 
- //     if (loading) {
-//   return (
-//     <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center">
-//       <div className="absolute inset-0 pointer-events-none">
-//         <motion.div
-//           className="absolute top-1/3 right-1/4 w-64 h-64 rounded-full bg-accent/20 blur-3xl"
-//           animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.6, 0.3] }}
-//           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-//         />
-//         <motion.div
-//           className="absolute bottom-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/10 blur-3xl"
-//           animate={{ scale: [1.2, 1, 1.2], opacity: [0.2, 0.5, 0.2] }}
-//           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-//         />
-//       </div>
-
-//       <div className="relative z-10 text-center">
-//         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-accent mx-auto mb-6"></div>
-//         <p className="text-xl font-medium text-foreground">Loading available internships...</p>
-//       </div>
-//     </div>
-//   );
-// }
-
-  if (loading) {
+  if (loading || forcedLoading) {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">

@@ -33,6 +33,9 @@ class User extends Authenticatable
         'nationality',
         'gender',
         'date_of_birth',
+        'bio',
+        'linkedin',
+        'profile_picture',
         'user_type',
     ];
 
@@ -103,7 +106,7 @@ class User extends Authenticatable
 
         $this->oneTimePassword()->create([
             'code'       => $otpCode,
-            'expires_at' => Carbon::now()->addMinutes(5),
+            'expires_at' => Carbon::now()->addMinutes(1),
         ]);
 
         // Mail::to($this->email)->send(new OtpMail($otpCode));
@@ -150,5 +153,16 @@ class User extends Authenticatable
         }
 
         return $this->adminIndustries()->pluck('industry')->toArray();
+    }
+
+    // app/Models/User.php
+
+    public function getProfilePictureUrlAttribute(): ?string
+    {
+        if (!$this->profile_picture) {
+            return null;
+        }
+
+        return asset('storage/' . $this->profile_picture);
     }
 }

@@ -10,19 +10,11 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\OtpMail;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 use App\Mail\WelcomeEmail;
-use Illuminate\Support\Facades\Cache;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    /**
-     * Register a new user (student)
-     */
-    /**
-     * Register a new user (student)
-     */
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -37,23 +29,14 @@ class AuthController extends Controller
             'gender'             => ['required', 'in:Male,Female,Non-binary,Other,Prefer not to say'],
             'date_of_birth'      => ['required', 'date', 'before:-15 years'],
             'email'              => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password'           => [
-                'required',
-                'confirmed',
-                'min:8',
-                'regex:/[A-Z]/',
-                'regex:/[a-z]/',
-                'regex:/[0-9]/',
-                'regex:/[^A-Za-z0-9]/',
-            ],
+            'password'           => ['required', 'confirmed', 'min:8', 'regex:/[A-Z]/', 'regex:/[a-z]/', 'regex:/[0-9]/', 'regex:/[^A-Za-z0-9]/'],
         ]);
 
-        // Logic to combine name
         $fullName = trim($validated['first_name'] . ' ' . ($validated['middle_name'] ?? '') . ' ' . $validated['last_name']);
         $fullName = str_replace('  ', ' ', $fullName);
 
         $user = User::create([
-            'name'               => $fullName, // Combined Name
+            'name'               => $fullName,
             'first_name'         => $validated['first_name'],
             'middle_name'        => $validated['middle_name'] ?? null,
             'last_name'          => $validated['last_name'],
@@ -74,29 +57,23 @@ class AuthController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user->only([
-                'id',
-                'name',
-                'first_name',
-                'middle_name',
-                'last_name',
-                'email',
-                'user_type',
-                'university',
-                'course',
-                'year',
-                'phone',
-                'nationality',
-                'gender',
-                'date_of_birth'
-            ]),
+            'user' => [
+                'id'              => $user->id,
+                'name'            => $user->name,
+                'first_name'      => $user->first_name,
+                'last_name'       => $user->last_name,
+                'email'           => $user->email,
+                'user_type'       => $user->user_type,
+                'profile_picture' => $user->profile_picture_url,
+                'university'      => $user->university,
+                'course'          => $user->course,
+                'year'            => $user->year,
+                'phone'           => $user->phone,
+            ],
             'token' => $token,
         ], 201);
     }
 
-    /**
-     * Login → send OTP instead of direct login
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -111,19 +88,14 @@ class AuthController extends Controller
         }
 
         $user = $request->user();
-
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
         OneTimePassCode::updateOrCreate(
             ['user_id' => $user->id],
-            [
-                'code'       => $code,
-                'expires_at' => Carbon::now()->addSeconds(60),
-            ]
+            ['code' => $code, 'expires_at' => Carbon::now()->addSeconds(60)]
         );
 
         Mail::to($user->email)->queue(new OtpMail($code));
-
         session(['otp_user_id' => $user->id]);
 
         return response()->json([
@@ -132,15 +104,9 @@ class AuthController extends Controller
         ]);
     }
 
-    /**
-     * Verify OTP → complete login
-     */
     public function verifyOtp(Request $request)
     {
-        $request->validate([
-            'otp' => 'required|string|size:6',
-        ]);
-
+        $request->validate(['otp' => 'required|string|size:6']);
         $userId = session('otp_user_id');
 
         if (!$userId) {
@@ -148,7 +114,6 @@ class AuthController extends Controller
         }
 
         $user = User::find($userId);
-
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
@@ -163,156 +128,162 @@ class AuthController extends Controller
         }
 
         Auth::login($user);
-
         $otpRecord->delete();
         $request->session()->forget('otp_user_id');
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'user' => $user->only([
-                'id',
-                'first_name',
-                'middle_name',
-                'last_name',
-                'email',
-                'user_type',
-                'university',
-                'course',
-                'year',
-                'phone',
-                'nationality',
-                'gender',
-                'date_of_birth'
-            ]),
+            'user' => [
+                'id'              => $user->id,
+                'first_name'      => $user->first_name,
+                'last_name'       => $user->last_name,
+                'email'           => $user->email,
+                'user_type'       => $user->user_type,
+                'profile_picture' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
+                'university'      => $user->university,
+                'course'          => $user->course,
+                'year'            => $user->year,
+                'phone'           => $user->phone,
+            ],
             'token'   => $token,
             'message' => 'Verification successful'
         ]);
     }
 
-    /**
-     * Resend OTP (for login flow)
-     */
     public function resendOtp(Request $request)
     {
         $userId = session('otp_user_id');
-
-        if (!$userId) {
-            return response()->json(['message' => 'Session expired'], 401);
-        }
+        if (!$userId) return response()->json(['message' => 'Session expired'], 401);
 
         $user = User::find($userId);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
+        if (!$user) return response()->json(['message' => 'User not found'], 404);
 
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-
         OneTimePassCode::updateOrCreate(
             ['user_id' => $user->id],
-            [
-                'code'       => $code,
-                'expires_at' => Carbon::now()->addSeconds(60),
-            ]
+            ['code' => $code, 'expires_at' => Carbon::now()->addSeconds(60)]
         );
 
         Mail::to($user->email)->queue(new OtpMail($code));
-
         return response()->json(['message' => 'New verification code sent']);
     }
 
-    /**
-     * Logout
-     */
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
-        return response()->json([
-            'message' => 'Logged out successfully'
-        ]);
+        return response()->json(['message' => 'Logged out successfully']);
     }
 
-    /**
-     * Get authenticated user
-     */
     public function user(Request $request)
     {
         return response()->json($request->user());
     }
 
-    /**
-     * Forgot Password → send OTP (secure – same message always)
-     */
     public function forgotPassword(Request $request)
     {
         $request->validate(['email' => 'required|email']);
-
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            // Direct message you want
-            return response()->json([
-                'message' => 'This email is not registered in our system. Please sign up first before you can reset your password.'
-            ], 404);  // or 422 – using error status helps frontend distinguish
+            return response()->json(['message' => 'This email is not registered.'], 404);
         }
 
-        // ── Exists ── proceed normally
         $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
-
         OneTimePassCode::updateOrCreate(
             ['user_id' => $user->id],
-            [
-                'code'       => $code,
-                'expires_at' => Carbon::now()->addMinutes(10),
-            ]
+            ['code' => $code, 'expires_at' => Carbon::now()->addMinutes(1)]
         );
 
         Mail::to($user->email)->queue(new OtpMail($code));
-
-        return response()->json([
-            'message' => 'A 6-digit reset code has been sent to your email.'
-        ]);
+        return response()->json(['message' => 'A 6-digit reset code has been sent to your email.']);
     }
-    /**
-     * Reset Password using OTP
-     */
+
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'email'               => 'required|email',
-            'otp'                 => 'required|string|size:6',
-            'password'            => 'required|confirmed|min:8',
-            'password_confirmation' => 'required',
+            'email' => 'required|email',
+            'otp' => 'required|string|size:6',
+            'password' => 'required|confirmed|min:8',
         ]);
 
         $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'Invalid request.'], 422);
-        }
+        if (!$user) return response()->json(['message' => 'Invalid request.'], 422);
 
         $otpRecord = OneTimePassCode::where('user_id', $user->id)
             ->where('code', $request->otp)
             ->where('expires_at', '>', Carbon::now())
             ->first();
 
-        if (!$otpRecord) {
-            return response()->json(['message' => 'Invalid or expired code.'], 422);
-        }
+        if (!$otpRecord) return response()->json(['message' => 'Invalid or expired code.'], 422);
 
         $user->password = Hash::make($request->password);
         $user->save();
-
         $otpRecord->delete();
 
         return response()->json(['message' => 'Password has been updated successfully.']);
     }
 
-    // ───────────────────────────────────────────────
-    // Optional / legacy methods (you can keep or remove)
-    // ───────────────────────────────────────────────
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+        return response()->json([
+            'id'              => $user->id,
+            'first_name'      => $user->first_name,
+            'last_name'       => $user->last_name,
+            'email'           => $user->email,
+            'phone'           => $user->phone,
+            'university'      => $user->university,
+            'course'          => $user->course,
+            'year'            => $user->year,
+            'date_of_birth'   => $user->date_of_birth,
+            'bio'             => $user->bio,
+            'linkedin'        => $user->linkedin,
+            'profile_picture' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
+            'user_type'       => $user->user_type,
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'phone'          => 'nullable|string|max:20',
+            'university'     => 'nullable|string|max:255',
+            'course'         => 'nullable|string|max:255',
+            'year'           => 'nullable|string|max:100',
+            'date_of_birth'  => 'nullable|date',
+            'bio'            => 'nullable|string|max:1000',
+            'linkedin'       => 'nullable|url|max:255',
+            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        if ($request->hasFile('profile_picture')) {
+            $path = $request->file('profile_picture')->store('profiles', 'public');
+            $validated['profile_picture'] = $path;
+        }
+
+        $user->update($validated);
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => [
+                'id'              => $user->id,
+                'first_name'      => $user->first_name,
+                'last_name'       => $user->last_name,
+                'email'           => $user->email,
+                'phone'           => $user->phone,
+                'university'      => $user->university,
+                'course'          => $user->course,
+                'year'            => $user->year,
+                'date_of_birth'   => $user->date_of_birth,
+                'bio'             => $user->bio,
+                'linkedin'        => $user->linkedin,
+                'profile_picture' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
+                'user_type'       => $user->user_type,
+            ]
+        ]);
+    }
 
     public function verifySetPasswordOtp(Request $request)
     {
@@ -358,51 +329,5 @@ class AuthController extends Controller
             'user'    => $user,
             'token'   => $token
         ]);
-    }
-
-    public function profile(Request $request)
-    {
-        $user = $request->user();
-
-        return response()->json([
-            'first_name' => $user->first_name,
-            'last_name' => $user->last_name,
-            'email' => $user->email,
-            'phone' => $user->phone,
-            'university' => $user->university,
-            'course' => $user->course,
-            'year' => $user->year,
-            'date_of_birth'   => $user->date_of_birth,
-            'bio' => $user->bio,
-            'linkedin' => $user->linkedin,
-            'github' => $user->github,
-            'profile_picture' => $user->profile_picture ? asset('storage/' . $user->profile_picture) : null,
-        ]);
-    }
-
-    public function updateProfile(Request $request)
-    {
-        $user = $request->user();
-
-        $validated = $request->validate([
-            'phone' => 'nullable|string|max:20',
-            'university' => 'nullable|string|max:255',
-            'course' => 'nullable|string|max:255',
-            'year' => 'nullable|string|max:100',
-            'date_of_birth'  => 'nullable|date|before:-15 years',
-            'bio' => 'nullable|string|max:1000',
-            'linkedin' => 'nullable|url|max:255',
-            'github' => 'nullable|url|max:255',
-            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
-
-        if ($request->hasFile('profile_picture')) {
-            $path = $request->file('profile_picture')->store('profiles', 'public');
-            $validated['profile_picture'] = $path;
-        }
-
-        $user->update($validated);
-
-        return response()->json(['message' => 'Profile updated successfully']);
     }
 }

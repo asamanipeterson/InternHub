@@ -46,24 +46,34 @@ const InterviewPrep = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-16 lg:pt-32 lg:pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/80" />
-        <div className="absolute inset-0 bg-[url('/placeholder.svg')] opacity-5" />
-        
+      {/* Hero Section - Updated with About page styling */}
+      <section className="relative pt-32 pb-20 gradient-hero overflow-hidden">
+        {/* Animated Background Blobs from About page */}
+        <motion.div
+          className="absolute top-20 left-[10%] w-96 h-96 rounded-full bg-accent/10 blur-3xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ duration: 10, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute bottom-10 right-[5%] w-72 h-72 rounded-full bg-primary/20 blur-3xl"
+          animate={{ scale: [1.2, 1, 1.2] }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
+
         <div className="container mx-auto px-4 lg:px-8 relative z-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.8 }}
             className="text-center max-w-3xl mx-auto"
           >
             <motion.span
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1, duration: 0.5 }}
-              className="inline-block px-4 py-2 rounded-full bg-accent/20 text-accent font-medium text-sm mb-6"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/20 text-accent-foreground font-medium text-sm mb-6"
             >
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               Interview Resources
             </motion.span>
             
@@ -71,7 +81,7 @@ const InterviewPrep = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.6 }}
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground mb-4"
+              className="text-3xl md:text-4xl lg:text-6xl font-bold text-primary-foreground mb-6"
             >
               Interview{" "}
               <span className="relative inline-block">
@@ -89,7 +99,7 @@ const InterviewPrep = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.6 }}
-              className="text-lg text-primary-foreground/80 mb-8"
+              className="text-lg lg:text-xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto"
             >
               Ace your next interview with comprehensive preparation resources and expert guidance.
             </motion.p>
@@ -100,7 +110,7 @@ const InterviewPrep = () => {
               transition={{ delay: 0.4, duration: 0.6 }}
             >
               <Link to="/mentorship">
-                <Button size="lg" variant="accent">
+                <Button size="xl" variant="hero">
                   <Video className="w-5 h-5 mr-2" />
                   Schedule Mock Interview
                 </Button>
@@ -195,7 +205,7 @@ const InterviewPrep = () => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="bg-card p-8 rounded-2xl border border-border"
+              className="bg-card p-8 rounded-2xl border border-border shadow-elegant"
             >
               <h3 className="text-2xl font-bold text-foreground mb-4">Practice Makes Perfect</h3>
               <p className="text-muted-foreground mb-6">

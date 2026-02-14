@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, LogOut, UserCircle, ChevronDown, Bell } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import logo from "@/assets/logo.png";
@@ -40,7 +41,7 @@ export const Navbar = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Load user & dropdown outside click
+  // Load user & listen for updates
   useEffect(() => {
     const loadUser = () => {
       try {
@@ -72,7 +73,7 @@ export const Navbar = () => {
     };
   }, []);
 
-  // Notification count
+  // Notification count polling
   useEffect(() => {
     if (!user) return;
 
@@ -109,7 +110,6 @@ export const Navbar = () => {
 
   const isDarkSection = !isScrolled;
 
-  // Only show dashboard link in main nav for admin/mentor/industry admin
   const dashboardLink = (() => {
     if (isAdmin) return { label: "Admin Dashboard", href: "/dashboard" };
     if (isMentor) return { label: "Mentor Dashboard", href: "/mentor/dashboard" };
@@ -150,6 +150,26 @@ export const Navbar = () => {
     if (href === "/") return location.pathname === "/";
     return location.pathname.startsWith(href);
   };
+
+  // ───────────────────────────────────────────────
+  // URL normalizer for profile picture (fixes relative vs absolute URLs)
+  const getProfilePicUrl = (path?: string) => {
+    if (!path) return "/default-avatar.png";
+
+    // Already a full URL
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      return path;
+    }
+
+    // Laravel asset() style → starts with /storage/
+    if (path.startsWith("/storage/")) {
+      return `http://localhost:8000${path}`;
+    }
+
+    // Raw path from DB (most common inconsistency)
+    return `http://localhost:8000/storage/${path}`;
+  };
+  // ───────────────────────────────────────────────
 
   return (
     <motion.nav
@@ -236,7 +256,16 @@ export const Navbar = () => {
                       isDarkSection ? "hover:bg-white/10 text-white" : "hover:bg-black/5 text-gray-800"
                     )}
                   >
-                    <UserCircle className={cn("h-6 w-6", isDarkSection ? "text-white/90" : "text-gray-600")} />
+                    <Avatar className="h-8 w-8 border border-accent/20">
+                      <AvatarImage
+                        src={getProfilePicUrl(user?.profile_picture)}
+                        alt={userName}
+                        className="object-cover"
+                      />
+                      <AvatarFallback>
+                        <UserCircle className={cn("h-8 w-8", isDarkSection ? "text-black" : "text-gray-600")} />
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="font-medium text-sm hidden md:block">{userName}</span>
                     <ChevronDown className={cn("h-4 w-4 transition-transform", isDropdownOpen ? "rotate-180" : "")} />
                   </button>
@@ -253,12 +282,23 @@ export const Navbar = () => {
                         )}
                       >
                         <div className="py-2">
-                          <div className={cn("px-4 py-3 border-b", isDarkSection ? "border-white/10" : "border-gray-100")}>
-                            <p className="font-semibold">{userName}</p>
-                            <p className={cn("text-xs", isDarkSection ? "text-white/70" : "text-gray-500")}>{userRoleDisplay}</p>
+                          <div className={cn("px-4 py-3 border-b flex items-center gap-3", isDarkSection ? "border-white/10" : "border-gray-100")}>
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage
+                                src={getProfilePicUrl(user?.profile_picture)}
+                                alt={userName}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="text-accent font-bold">
+                                {userName[0]?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold">{userName}</p>
+                              <p className={cn("text-xs", isDarkSection ? "text-white/70" : "text-gray-500")}>{userRoleDisplay}</p>
+                            </div>
                           </div>
 
-                          {/* "Your Dashboard" only for students – inside dropdown */}
                           {isStudent && (
                             <Link
                               to="/student/dashboard"
@@ -269,7 +309,6 @@ export const Navbar = () => {
                             </Link>
                           )}
 
-                          {/* Logout */}
                           <button
                             onClick={handleLogout}
                             className={cn(
@@ -313,27 +352,94 @@ export const Navbar = () => {
             className={cn("lg:hidden border-t", isDarkSection ? "bg-black/90 border-white/10" : "bg-white border-gray-200")}
           >
             <div className="container mx-auto px-4 py-6 space-y-4">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.label}
-                  to={link.href}
-                  className={cn(
-                    "block py-3 px-4 rounded-lg font-medium",
-                    isActive(link.href) ? "bg-[#ff5722] text-white" : "text-gray-600"
-                  )}
-                  onClick={() => setIsOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              <Link
+                to="/"
+                className={cn(
+                  "flex items-center gap-3 py-3 px-4 rounded-lg font-medium transition-colors",
+                  location.pathname === "/"
+                    ? "bg-[#ff5722] text-white"
+                    : isDarkSection
+                    ? "text-white hover:bg-white/10"
+                    : "text-gray-700 hover:bg-gray-100"
+                )}
+                onClick={() => setIsOpen(false)}
+              >
+                <span>Home</span>
+              </Link>
+
+              {navLinks
+                .filter((link) => link.href !== "/")
+                .map((link) => (
+                  <Link
+                    key={link.label}
+                    to={link.href}
+                    className={cn(
+                      "block py-3 px-4 rounded-lg font-medium transition-colors",
+                      isActive(link.href)
+                        ? "bg-[#ff5722] text-white"
+                        : isDarkSection
+                        ? "text-white hover:bg-white/10"
+                        : "text-gray-700 hover:bg-gray-100"
+                    )}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
 
               {isLoggedIn && (
                 <>
-                  {/* Mobile: Your Dashboard for students */}
+                  <button
+                    className={cn(
+                      "flex items-center gap-3 w-full py-3 px-4 rounded-lg font-medium transition-colors",
+                      notificationCount > 0
+                        ? "text-[#ff5722] hover:bg-[#ff5722]/10"
+                        : isDarkSection
+                        ? "text-white hover:bg-white/10"
+                        : "text-gray-700 hover:bg-gray-100"
+                    )}
+                    onClick={() => toast.info("Notifications coming soon!")}
+                  >
+                    <div className="relative">
+                      <Bell className="h-5 w-5" />
+                      {notificationCount > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-[#ff5722] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                          {notificationCount}
+                        </span>
+                      )}
+                    </div>
+                    <span>Notifications</span>
+                  </button>
+
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 border-t border-b"
+                    style={{ borderColor: isDarkSection ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                  >
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage
+                        src={getProfilePicUrl(user?.profile_picture)}
+                        alt={userName}
+                        className="object-cover"
+                      />
+                      <AvatarFallback>
+                        {userName[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className={cn("text-medium", isDarkSection ? "text-white/70" : "text-gray-500")}>{userName}</p>
+                      <p className={cn("text-xs", isDarkSection ? "text-white/70" : "text-gray-500")}>
+                        {userRoleDisplay}
+                      </p>
+                    </div>
+                  </div>
+
                   {isStudent && (
                     <Link
                       to="/student/dashboard"
-                      className="block py-3 px-4 rounded-lg font-medium text-gray-600"
+                      className={cn(
+                        "block py-3 px-4 rounded-lg font-medium transition-colors",
+                        isDarkSection ? "text-white hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"
+                      )}
                       onClick={() => setIsOpen(false)}
                     >
                       Your Dashboard

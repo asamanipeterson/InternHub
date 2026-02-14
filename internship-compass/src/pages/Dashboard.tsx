@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Tabs,
@@ -140,7 +141,7 @@ interface IndustryAdmin {
 }
 
 const ITEMS_PER_PAGE = 10;
-const REFRESH_INTERVAL = 25000;
+const REFRESH_INTERVAL = 60000;
 const INDUSTRIES_PER_LOAD = 6;
 const INDUSTRIES = [
   "Technology", "Finance", "Energy", "HealthCare", "Arts & Design", "Education", "Manufacturing",
@@ -232,6 +233,13 @@ const Dashboard = () => {
     email: "",
     industries: [] as string[],
   });
+
+  // ── New states for custom reject reason dialog ───────────────────────────────
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedReason, setSelectedReason] = useState<string>("");
+  const [customReason, setCustomReason] = useState<string>("");
+  const [rejecting, setRejecting] = useState(false);
 
   const getCvUrl = (path: string) => `${api.defaults.baseURL}/storage/${path}`;
   const companyFileInputRef = useRef<HTMLInputElement>(null);
@@ -593,21 +601,12 @@ const Dashboard = () => {
     }
   };
 
-  const handleRejectBooking = async (bookingId: string) => {
-    const booking = allGroupedBookings.flatMap(g => g.bookings).find(b => b.id === bookingId);
-    if (!booking) return;
-    const reason = prompt("Please provide a reason for rejection (sent to student):", "");
-    if (!reason || reason.trim().length < 10) {
-      toast.error("Rejection reason must be at least 10 characters.");
-      return;
-    }
-    try {
-      await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
-      toast.success("Application rejected.");
-      await refreshData();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to reject application");
-    }
+  // ── Updated: opens custom dialog instead of prompt ────────────────────────────
+  const handleRejectBooking = (bookingId: string) => {
+    setSelectedBookingId(bookingId);
+    setSelectedReason("");
+    setCustomReason("");
+    setRejectDialogOpen(true);
   };
 
   const handleCreateIndustryAdmin = async () => {
@@ -659,17 +658,15 @@ const Dashboard = () => {
   };
 
   if (loading) {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
-        <p className="text-lg text-primary-foreground/80">Loading available internships...</p>
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-lg text-primary-foreground/80">Loading available internships...</p>
+        </div>
       </div>
-    </div>
-  );
-}
-
- 
+    );
+  }
 
   const isSuperAdmin = currentUser?.user_type === 'admin';
   const displayedCompanies = companies.slice(0, visibleCompanies);
@@ -1639,6 +1636,135 @@ const Dashboard = () => {
           <div className="mt-2 text-muted-foreground leading-relaxed whitespace-pre-wrap text-base">
             {selectedBioMentor?.bio || "No detailed bio available for this mentor."}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Reject Reason Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => {
+        setRejectDialogOpen(open);
+        if (!open) {
+          setSelectedBookingId(null);
+          setSelectedReason("");
+          setCustomReason("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Application</DialogTitle>
+            <DialogDescription>
+              Please select a reason for rejection. This will be sent to the student.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              {[
+                "Does not meet minimum academic requirements",
+                "Incomplete application / missing documents",
+                "Position already filled",
+                "Not a good fit for the role based on CV",
+                "Limited internship slots available",
+                "Application submitted after deadline",
+                "Other (please specify)",
+              ].map((reason) => (
+                <div key={reason} className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id={`reason-${reason.replace(/\s+/g, '-').toLowerCase()}`}
+                    name="rejection-reason"
+                    value={reason}
+                    checked={selectedReason === reason}
+                    onChange={(e) => {
+                      setSelectedReason(e.target.value);
+                      if (reason !== "Other (please specify)") {
+                        setCustomReason("");
+                      }
+                    }}
+                    className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label
+                    htmlFor={`reason-${reason.replace(/\s+/g, '-').toLowerCase()}`}
+                    className="text-sm font-medium leading-none text-foreground cursor-pointer"
+                  >
+                    {reason}
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            {selectedReason === "Other (please specify)" && (
+              <div className="mt-4">
+                <Label htmlFor="custom-reason">Please specify the reason</Label>
+                <Textarea
+                  id="custom-reason"
+                  placeholder="Enter detailed reason here..."
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  rows={3}
+                  className="mt-1.5"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialogOpen(false)}
+              disabled={rejecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!selectedBookingId) return;
+
+                const finalReason =
+                  selectedReason === "Other (please specify)"
+                    ? customReason.trim()
+                    : selectedReason;
+
+                if (!finalReason) {
+                  toast.error("Please select or enter a rejection reason");
+                  return;
+                }
+
+                if (finalReason.length < 10) {
+                  toast.error("Rejection reason must be at least 10 characters");
+                  return;
+                }
+
+                setRejecting(true);
+                try {
+                  await api.post(`/api/admin/bookings/${selectedBookingId}/reject`, {
+                    reason: finalReason,
+                  });
+                  toast.success("Application rejected.");
+                  setRejectDialogOpen(false);
+                  await refreshData();
+                } catch (err: any) {
+                  toast.error(err.response?.data?.message || "Failed to reject application");
+                } finally {
+                  setRejecting(false);
+                }
+              }}
+              disabled={
+                rejecting ||
+                !selectedReason ||
+                (selectedReason === "Other (please specify)" && !customReason.trim())
+              }
+            >
+              {rejecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                "Confirm Reject"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

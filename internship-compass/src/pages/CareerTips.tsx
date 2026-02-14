@@ -49,24 +49,34 @@ const CareerTips = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-16 lg:pt-32 lg:pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/80" />
-        <div className="absolute inset-0 bg-[url('/placeholder.svg')] opacity-5" />
-        
+      {/* Hero Section - Updated with About page gradient and styling */}
+      <section className="relative pt-32 pb-20 gradient-hero overflow-hidden">
+        {/* Animated Background Blobs */}
+        <motion.div
+          className="absolute top-20 left-[10%] w-96 h-96 rounded-full bg-accent/10 blur-3xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ duration: 10, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute bottom-10 right-[5%] w-72 h-72 rounded-full bg-primary/20 blur-3xl"
+          animate={{ scale: [1.2, 1, 1.2] }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
+
         <div className="container mx-auto px-4 lg:px-8 relative z-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-3xl mx-auto"
+            transition={{ duration: 0.8 }}
+            className="text-center max-w-4xl mx-auto"
           >
             <motion.span
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1, duration: 0.5 }}
-              className="inline-block px-4 py-2 rounded-full bg-accent/20 text-accent font-medium text-sm mb-6"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/20 text-accent-foreground font-medium text-sm mb-6"
             >
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               Career Development
             </motion.span>
             
@@ -74,7 +84,7 @@ const CareerTips = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.6 }}
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground mb-4"
+              className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-6"
             >
               Career{" "}
               <span className="relative inline-block">
@@ -92,7 +102,7 @@ const CareerTips = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.6 }}
-              className="text-lg text-primary-foreground/80"
+              className="text-lg lg:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
             >
               Expert advice to help you navigate your career journey and achieve your professional goals.
             </motion.p>
@@ -111,16 +121,16 @@ const CareerTips = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1, duration: 0.5 }}
-                className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow"
+                className="bg-card rounded-2xl border border-border p-6 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
               >
                 <div className="w-14 h-14 rounded-xl bg-accent/20 flex items-center justify-center mb-4">
                   <tip.icon className="w-7 h-7 text-accent" />
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-3">{tip.title}</h3>
-                <p className="text-muted-foreground mb-4">{tip.description}</p>
-                <div className="p-4 rounded-xl bg-secondary/50">
+                <p className="text-muted-foreground mb-4 leading-relaxed">{tip.description}</p>
+                <div className="p-4 rounded-xl bg-secondary/50 border border-border/50">
                   <p className="text-sm font-medium text-foreground">
-                    <span className="text-accent">Pro Tip:</span> {tip.tip}
+                    <span className="text-accent font-bold">Pro Tip:</span> {tip.tip}
                   </p>
                 </div>
               </motion.div>
@@ -137,7 +147,7 @@ const CareerTips = () => {
               Want personalized career guidance?
             </p>
             <Link to="/mentorship">
-              <Button size="lg">
+              <Button size="xl" variant="default" className="shadow-elegant">
                 Connect with a Mentor
               </Button>
             </Link>

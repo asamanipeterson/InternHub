@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { ArrowLeft, Clock, FileText, Download, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Clock, FileText, Download, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -35,6 +38,13 @@ const PendingApplications = () => {
   const [cvModalOpen, setCvModalOpen] = useState(false);
   const [currentCvPath, setCurrentCvPath] = useState<string | null>(null);
   const [currentStudentName, setCurrentStudentName] = useState("");
+
+  // ── New states for custom reject reason dialog ───────────────────────────────
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [selectedReason, setSelectedReason] = useState<string>("");
+  const [customReason, setCustomReason] = useState<string>("");
+  const [rejecting, setRejecting] = useState(false);
 
   const getCvUrl = (path: string) => `${api.defaults.baseURL}/storage/${path}`;
 
@@ -77,24 +87,12 @@ const PendingApplications = () => {
     }
   };
 
-  const handleRejectBooking = async (bookingId: string, studentName: string) => {
-    const reason = prompt(
-      `Please provide a reason for rejecting ${studentName}'s application (sent to student):`,
-      ""
-    );
-
-    if (!reason || reason.trim().length < 10) {
-      toast.error("Rejection reason must be at least 10 characters.");
-      return;
-    }
-
-    try {
-      await api.post(`/api/admin/bookings/${bookingId}/reject`, { reason: reason.trim() });
-      toast.success("Application rejected.");
-      await fetchPending(); // Refresh the list
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to reject application");
-    }
+  // ── Updated: opens custom dialog instead of prompt ────────────────────────────
+  const handleRejectBooking = (bookingId: string, studentName: string) => {
+    setSelectedBookingId(bookingId);
+    setSelectedReason("");
+    setCustomReason("");
+    setRejectDialogOpen(true);
   };
 
   if (loading) {
@@ -112,44 +110,43 @@ const PendingApplications = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-        <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
-          <div className="container mx-auto px-4 lg:px-8">
-            <motion.div
+      <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
+        <div className="container mx-auto px-4 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center max-w-4xl mx-auto"
+          >
+            <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center max-w-4xl mx-auto"
+              transition={{ delay: 0.2, duration: 0.7 }}
+              className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-5"
             >
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.7 }}
-                className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-5"
-              >
-                Pending{" "}
-                <span className="relative inline-block">
-                  <span className="text-accent">Applications</span>
-                  <motion.span
-                    className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ duration: 0.8, delay: 0.8 }}
-                  />
-                </span>
-              </motion.h1>
+              Pending{" "}
+              <span className="relative inline-block">
+                <span className="text-accent">Applications</span>
+                <motion.span
+                  className="absolute -bottom-1 left-0 w-full h-1 bg-accent rounded-full"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.8, delay: 0.8 }}
+                />
+              </span>
+            </motion.h1>
 
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.7 }}
-                className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
-              >
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.7 }}
+              className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
+            >
               {bookings.length} application{bookings.length !== 1 ? 's' : ''} awaiting review
-              </motion.p>
-            </motion.div>
-          </div>
-        </section>
-     
+            </motion.p>
+          </motion.div>
+        </div>
+      </section>
 
       <section className="py-12">
         <div className="container mx-auto px-4 lg:px-8">
@@ -261,6 +258,135 @@ const PendingApplications = () => {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Reject Reason Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => {
+        setRejectDialogOpen(open);
+        if (!open) {
+          setSelectedBookingId(null);
+          setSelectedReason("");
+          setCustomReason("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Application</DialogTitle>
+            <DialogDescription>
+              Please select a reason for rejection. This will be sent to the student.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              {[
+                "Does not meet minimum academic requirements",
+                "Incomplete application / missing documents",
+                "Position already filled",
+                "Not a good fit for the role based on CV",
+                "Limited internship slots available",
+                "Application submitted after deadline",
+                "Other (please specify)",
+              ].map((reason) => (
+                <div key={reason} className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id={`reason-${reason.replace(/\s+/g, '-').toLowerCase()}`}
+                    name="rejection-reason"
+                    value={reason}
+                    checked={selectedReason === reason}
+                    onChange={(e) => {
+                      setSelectedReason(e.target.value);
+                      if (reason !== "Other (please specify)") {
+                        setCustomReason("");
+                      }
+                    }}
+                    className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label
+                    htmlFor={`reason-${reason.replace(/\s+/g, '-').toLowerCase()}`}
+                    className="text-sm font-medium leading-none text-foreground cursor-pointer"
+                  >
+                    {reason}
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            {selectedReason === "Other (please specify)" && (
+              <div className="mt-4">
+                <Label htmlFor="custom-reason">Please specify the reason</Label>
+                <Textarea
+                  id="custom-reason"
+                  placeholder="Enter detailed reason here..."
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  rows={3}
+                  className="mt-1.5"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialogOpen(false)}
+              disabled={rejecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!selectedBookingId) return;
+
+                const finalReason =
+                  selectedReason === "Other (please specify)"
+                    ? customReason.trim()
+                    : selectedReason;
+
+                if (!finalReason) {
+                  toast.error("Please select or enter a rejection reason");
+                  return;
+                }
+
+                if (finalReason.length < 10) {
+                  toast.error("Rejection reason must be at least 10 characters");
+                  return;
+                }
+
+                setRejecting(true);
+                try {
+                  await api.post(`/api/admin/bookings/${selectedBookingId}/reject`, {
+                    reason: finalReason,
+                  });
+                  toast.success("Application rejected.");
+                  setRejectDialogOpen(false);
+                  await fetchPending(); // Refresh list
+                } catch (err: any) {
+                  toast.error(err.response?.data?.message || "Failed to reject application");
+                } finally {
+                  setRejecting(false);
+                }
+              }}
+              disabled={
+                rejecting ||
+                !selectedReason ||
+                (selectedReason === "Other (please specify)" && !customReason.trim())
+              }
+            >
+              {rejecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejecting...
+                </>
+              ) : (
+                "Confirm Reject"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

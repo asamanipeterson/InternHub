@@ -56,6 +56,9 @@ class AdminController extends Controller
     /**
      * Create new industry admin + check for already assigned industries
      */
+    /**
+     * Create new industry admin + check for already assigned industries
+     */
     public function createIndustryAdmin(Request $request)
     {
         if (!auth()->user()?->isSuperAdmin()) {
@@ -72,30 +75,36 @@ class AdminController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $email = $request->email;
         $industries = $request->industries;
 
         // Check which industries are already taken
         $taken = AdminIndustry::whereIn('industry', $industries)
-            ->with('user')
-            ->get()
-            ->map(function ($record) {
-                return $record->industry;
-            })
+            ->pluck('industry')
             ->unique()
             ->values()
             ->toArray();
 
         if (!empty($taken)) {
             return response()->json([
-                'message' => 'One or more industries are already assigned to another admin',
+                'message'          => 'One or more industries are already assigned to another admin',
                 'taken_industries' => $taken
             ], 422);
         }
 
-        // Create user (no password yet)
+        // Generate name parts
+        $emailPrefix = explode('@', $email)[0];
+        $firstName = ucfirst(strtolower($emailPrefix));
+        $lastName = 'Industry Admin';
+
+
+        //     ? $industries[0] . ' Admin'
+
         $user = User::create([
-            'name'              => explode('@', $request->email)[0],
-            'email'             => $request->email,
+            'first_name'        => $firstName,
+            'middle_name'       => null,
+            'last_name'         => $lastName,
+            'email'             => $email,
             'password'          => null,
             'user_type'         => 'industry_admin',
             'email_verified_at' => now(),
@@ -104,17 +113,19 @@ class AdminController extends Controller
         // Assign industries
         foreach ($industries as $industry) {
             AdminIndustry::create([
-                'user_id'   => $user->id,
-                'industry'  => $industry,
+                'user_id'  => $user->id,
+                'industry' => $industry,
             ]);
         }
 
-        // Send password reset / set password email
+        // Send password setup email
         Mail::to($user->email)->queue(new SetIndustryAdminPassword($user));
 
         return response()->json([
             'message' => 'Industry admin created successfully. Set-password email sent.',
             'email'   => $user->email,
+            'name'    => $user->full_name,          // uses your accessor
+            'industries' => $industries,
         ], 201);
     }
 

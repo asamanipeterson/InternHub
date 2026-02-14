@@ -57,7 +57,7 @@ const App = () => (
           classNames: {
             toast:
               "group toast flex items-center gap-5 rounded-2xl shadow-2xl border-0 px-7 py-5 min-w-[380px] max-w-[90vw] md:min-w-[420px] backdrop-blur-xl text-base",
-            title: "font-semibold text-lg leading-tight",
+            title: "font-semibold text-md leading-tight",
             description: "text-base opacity-90 mt-1.5 leading-relaxed",
             icon: "text-2xl",
             loader: "scale-125",

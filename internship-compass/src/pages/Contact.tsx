@@ -43,24 +43,34 @@ const Contact = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-16 lg:pt-32 lg:pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/80" />
-        <div className="absolute inset-0 bg-[url('/placeholder.svg')] opacity-5" />
-        
+      {/* Hero Section - Updated with About page gradient and blobs */}
+      <section className="relative pt-32 pb-20 gradient-hero overflow-hidden">
+        {/* Animated Background Blobs */}
+        <motion.div
+          className="absolute top-20 left-[10%] w-96 h-96 rounded-full bg-accent/10 blur-3xl"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
+          transition={{ duration: 10, repeat: Infinity }}
+        />
+        <motion.div
+          className="absolute bottom-10 right-[5%] w-72 h-72 rounded-full bg-primary/20 blur-3xl"
+          animate={{ scale: [1.2, 1, 1.2] }}
+          transition={{ duration: 8, repeat: Infinity }}
+        />
+
         <div className="container mx-auto px-4 lg:px-8 relative z-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-3xl mx-auto"
+            transition={{ duration: 0.8 }}
+            className="text-center max-w-4xl mx-auto"
           >
             <motion.span
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1, duration: 0.5 }}
-              className="inline-block px-4 py-2 rounded-full bg-accent/20 text-accent font-medium text-sm mb-6"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/20 text-accent-foreground font-medium text-sm mb-6"
             >
+              <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               Get In Touch
             </motion.span>
             
@@ -68,7 +78,7 @@ const Contact = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.6 }}
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary-foreground mb-4"
+              className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground mb-6"
             >
               Contact{" "}
               <span className="relative inline-block">
@@ -86,7 +96,7 @@ const Contact = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.6 }}
-              className="text-lg text-primary-foreground/80"
+              className="text-lg lg:text-xl text-primary-foreground/80 max-w-2xl mx-auto"
             >
               Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
             </motion.p>
@@ -104,7 +114,7 @@ const Contact = () => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="bg-card rounded-2xl p-8 shadow-lg border border-border"
+              className="bg-card rounded-2xl p-8 shadow-elegant border border-border"
             >
               <h2 className="text-2xl font-bold text-foreground mb-6">Send us a Message</h2>
               
@@ -118,6 +128,7 @@ const Contact = () => {
                       value={formData.name}
                       onChange={handleChange}
                       placeholder="John Doe"
+                      className="bg-background"
                       required
                     />
                   </div>
@@ -130,6 +141,7 @@ const Contact = () => {
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="john@example.com"
+                      className="bg-background"
                       required
                     />
                   </div>
@@ -143,6 +155,7 @@ const Contact = () => {
                     value={formData.subject}
                     onChange={handleChange}
                     placeholder="How can we help?"
+                    className="bg-background"
                     required
                   />
                 </div>
@@ -156,11 +169,12 @@ const Contact = () => {
                     onChange={handleChange}
                     placeholder="Tell us more about your inquiry..."
                     rows={5}
+                    className="bg-background"
                     required
                   />
                 </div>
                 
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                <Button type="submit" size="lg" className="w-full shadow-elegant" disabled={isSubmitting}>
                   {isSubmitting ? (
                     "Sending..."
                   ) : (
@@ -182,60 +196,39 @@ const Contact = () => {
               className="space-y-8"
             >
               <div>
-                <h2 className="text-2xl font-bold text-foreground mb-4">Contact Information</h2>
-                <p className="text-muted-foreground">
+                <h2 className="text-3xl font-bold text-foreground mb-4">Contact Information</h2>
+                <p className="text-muted-foreground text-lg">
                   Reach out to us through any of the following channels. We're here to help!
                 </p>
               </div>
 
-              <div className="space-y-6">
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-secondary/50">
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Email Us</h3>
-                    <a href="mailto:hello@studentindustryconnect.com" className="text-muted-foreground hover:text-accent transition-colors">
-                      hello@studentindustryconnect.com
-                    </a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-secondary/50">
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Call Us</h3>
-                    <a href="tel:+1234567890" className="text-muted-foreground hover:text-accent transition-colors">
-                      +1 (234) 567-890
-                    </a>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-secondary/50">
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Visit Us</h3>
-                    <p className="text-muted-foreground">
-                      123 Innovation Street, Tech City
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4 p-4 rounded-xl bg-secondary/50">
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Business Hours</h3>
-                    <p className="text-muted-foreground">
-                      Monday - Friday: 9:00 AM - 6:00 PM
-                    </p>
-                  </div>
-                </div>
+              <div className="space-y-4">
+                {[
+                  { icon: Mail, title: "Email Us", content: "hello@studentindustryconnect.com", href: "mailto:hello@studentindustryconnect.com" },
+                  { icon: Phone, title: "Call Us", content: "+1 (234) 567-890", href: "tel:+1234567890" },
+                  { icon: MapPin, title: "Visit Us", content: "123 Innovation Street, Tech City" },
+                  { icon: Clock, title: "Business Hours", content: "Monday - Friday: 9:00 AM - 6:00 PM" }
+                ].map((item, index) => (
+                  <motion.div 
+                    key={index}
+                    whileHover={{ x: 5 }}
+                    className="flex items-start gap-4 p-4 rounded-xl bg-card border border-border shadow-sm"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-6 h-6 text-accent" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{item.title}</h3>
+                      {item.href ? (
+                        <a href={item.href} className="text-muted-foreground hover:text-accent transition-colors">
+                          {item.content}
+                        </a>
+                      ) : (
+                        <p className="text-muted-foreground">{item.content}</p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </motion.div>
           </div>

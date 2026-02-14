@@ -341,7 +341,10 @@ class MentorBookingController extends Controller
                 'id' => $booking->id,
                 'mentor' => [
                     'name' => $booking->mentor->user ? $booking->mentor->user->first_name . ' ' . $booking->mentor->user->last_name : 'Mentor',
-                    'image' => $booking->mentor->image ? asset('storage/' . $booking->mentor->image) : null,
+                    'image' => $booking->mentor->image
+                        ? asset($booking->mentor->image)
+                        : null,
+
                 ],
                 'scheduled_at' => $booking->scheduled_at,
                 'topic_description' => $booking->topic_description,

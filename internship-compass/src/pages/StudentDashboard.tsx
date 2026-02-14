@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Briefcase, Video, Download, Edit, CheckCircle, Clock, Linkedin, Github, Lock, Calendar, CalendarIcon, Sparkles } from 'lucide-react';
+import { Briefcase, Video, Download, Edit, CheckCircle, Clock, Calendar } from 'lucide-react';
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -49,9 +49,7 @@ export default function StudentDashboard() {
   const [internships, setInternships] = useState<any[]>([]);
   const [mentorships, setMentorships] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [forcedLoading, setForcedLoading] = useState(true); // minimum 2 seconds loader
 
-  // Profile form state
   const [profileForm, setProfileForm] = useState({
     phone: "",
     university: "",
@@ -60,21 +58,24 @@ export default function StudentDashboard() {
     date_of_birth: null as Date | null,
     bio: "",
     linkedin: "",
-    github: "",
     profile_picture: null as File | null,
   });
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       const minimumDelay = new Promise(resolve => setTimeout(resolve, 2000));
 
       try {
-        // 1. Get current user profile
         const userRes = await api.get("/api/student/profile");
         const data = userRes.data;
         setUser(data);
 
-        // Parse date_of_birth to Date object for DatePicker
+        // Sync with Navbar on load
+        localStorage.setItem("user", JSON.stringify(data));
+        window.dispatchEvent(new Event("userUpdated"));
+
         const dob = data.date_of_birth ? new Date(data.date_of_birth) : null;
 
         setProfileForm({
@@ -85,30 +86,37 @@ export default function StudentDashboard() {
           date_of_birth: dob,
           bio: data.bio || "",
           linkedin: data.linkedin || "",
-          github: data.github || "",
           profile_picture: null,
         });
 
-        // 2. Get student's internship applications
+        if (data.profile_picture) {
+          setPreviewUrl(data.profile_picture);
+        }
+
         const internRes = await api.get("/api/student/internships");
         setInternships(internRes.data);
 
-        // 3. Get student's mentorship sessions
         const mentorRes = await api.get("/api/student/mentorships");
         setMentorships(mentorRes.data);
 
-        await Promise.all([minimumDelay, Promise.resolve()]);
+        await minimumDelay;
       } catch (err) {
         toast.error("Failed to load dashboard data");
-        await minimumDelay;
       } finally {
         setLoading(false);
-        setForcedLoading(false);
       }
     };
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,9 +128,7 @@ export default function StudentDashboard() {
     formData.append("year", profileForm.year || "");
     formData.append("bio", profileForm.bio || "");
     formData.append("linkedin", profileForm.linkedin || "");
-    formData.append("github", profileForm.github || "");
 
-    // Send date_of_birth as YYYY-MM-DD
     if (profileForm.date_of_birth) {
       formData.append("date_of_birth", profileForm.date_of_birth.toISOString().split("T")[0]);
     }
@@ -132,58 +138,77 @@ export default function StudentDashboard() {
     }
 
     try {
-      await api.post("/api/student/profile", formData, {
+      const res = await api.post("/api/student/profile", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
+      const updatedUser = res.data.user;
+      setUser(updatedUser);
+
+      const dob = updatedUser.date_of_birth ? new Date(updatedUser.date_of_birth) : null;
+      setProfileForm(prev => ({ ...prev, ...updatedUser, date_of_birth: dob, profile_picture: null }));
+
+      setPreviewUrl(updatedUser.profile_picture || null);
+
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event("userUpdated"));
+
       toast.success("Profile updated successfully!");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update profile");
+    }
+  };
 
-      // Refresh data
-      const res = await api.get("/api/student/profile");
-      const data = res.data;
-      const dob = data.date_of_birth ? new Date(data.date_of_birth) : null;
-
-      setUser(data);
-      setProfileForm({
-        phone: data.phone || "",
-        university: data.university || "",
-        course: data.course || "",
-        year: data.year || "",
-        date_of_birth: dob,
-        bio: data.bio || "",
-        linkedin: data.linkedin || "",
-        github: data.github || "",
-        profile_picture: null,
-      });
-    } catch (err) {
-      toast.error("Failed to update profile");
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      const newPreview = URL.createObjectURL(file);
+      setPreviewUrl(newPreview);
+      setProfileForm({ ...profileForm, profile_picture: file });
     }
   };
 
   const profileCompletion = () => {
     if (!user) return 0;
     const required = ["phone", "university", "course", "year", "bio"];
-    const filled = required.filter(key => user[key]?.trim());
+    const filled = required.filter(key => user[key]?.toString().trim());
     return Math.round((filled.length / required.length) * 100);
   };
 
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return "—";
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? "—" : date.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'approved': return 'bg-blue-100 text-blue-800';
+      case 'paid': return 'bg-green-100 text-green-800';
+      case 'expired': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-red-100 text-red-800';
+    }
+  };
 
   if (loading) {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
-        <p className="text-lg text-primary-foreground/80">Loading your dashboard...</p>
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent mx-auto mb-4"></div>
+          <p className="text-lg text-primary-foreground/80">Loading your dashboard...</p>
+        </div>
       </div>
-    </div>
-  );
-}
-
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <Navbar />
 
-      {/* Animated background blobs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute top-20 right-[15%] w-96 h-96 rounded-full bg-foreground blur-3xl"
@@ -198,7 +223,6 @@ export default function StudentDashboard() {
       </div>
 
       <div className="relative z-10">
-        {/* Welcome Hero */}
         <section className="pt-24 lg:pt-32 pb-12 gradient-hero">
           <div className="container mx-auto px-4 lg:px-8">
             <motion.div
@@ -238,38 +262,39 @@ export default function StudentDashboard() {
           </div>
         </section>
 
-        {/* Quick Stats */}
         <div className="container mx-auto px-4 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
-              <CardContent className="pt-6 text-center">
-                <Briefcase className="w-10 h-10 mx-auto mb-4 text-accent" />
-                <CountUpStat end={internships.filter(b => b.status === 'pending').length} label="Pending Applications" />
-                <div className="mt-2 text-sm text-foreground/60">
-                  {internships.filter(b => b.status === 'approved').length} approved
-                </div>
-              </CardContent>
-            </Card>
+          <div className="flex justify-center mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl w-full">
+              <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+                <CardContent className="pt-6 text-center">
+                  <Briefcase className="w-10 h-10 mx-auto mb-4 text-accent" />
+                  <CountUpStat
+                    end={internships.filter(b => b.status === 'pending').length}
+                    label="Pending Applications"
+                  />
+                  <div className="mt-2 text-sm text-foreground/60">
+                    {internships.filter(b => b.status === 'approved').length} approved
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
-              <CardContent className="pt-6 text-center">
-                <Video className="w-10 h-10 mx-auto mb-4 text-accent" />
-                <CountUpStat end={mentorships.filter(s => new Date(s.scheduled_at) > new Date()).length} label="Upcoming Sessions" />
-                <div className="mt-2 text-sm text-foreground/60">
-                  Next: {mentorships[0]?.scheduled_at ? new Date(mentorships[0].scheduled_at).toLocaleDateString() : "None"}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
-              <CardContent className="pt-6 text-center">
-                <Lock className="w-10 h-10 mx-auto mb-4 text-accent" />
-                <CountUpStat end={500} suffix=".00" label="Total Payments (GHS)" />
-              </CardContent>
-            </Card>
+              <Card className="bg-card/80 backdrop-blur-sm border-accent/20 hover:border-accent/40 transition-all">
+                <CardContent className="pt-6 text-center">
+                  <Video className="w-10 h-10 mx-auto mb-4 text-accent" />
+                  <CountUpStat
+                    end={mentorships.filter(s => new Date(s.scheduled_at) > new Date()).length}
+                    label="Upcoming Sessions"
+                  />
+                  <div className="mt-2 text-sm text-foreground/60">
+                    Next: {mentorships[0]?.scheduled_at
+                      ? new Date(mentorships[0].scheduled_at).toLocaleDateString()
+                      : "None"}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
-          {/* Tabs */}
           <Tabs defaultValue="profile" className="space-y-8">
             <TabsList className="bg-secondary/50 border border-border/50 p-1 rounded-xl">
               <TabsTrigger value="profile">My Profile</TabsTrigger>
@@ -277,7 +302,6 @@ export default function StudentDashboard() {
               <TabsTrigger value="mentorship">Mentorship</TabsTrigger>
             </TabsList>
 
-            {/* PROFILE TAB */}
             <TabsContent value="profile">
               <Card className="bg-card/80 backdrop-blur-sm border-accent/20">
                 <CardHeader>
@@ -285,7 +309,6 @@ export default function StudentDashboard() {
                   <CardDescription>Keep your information up to date</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                  {/* Progress */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Profile Completion</span>
@@ -294,110 +317,117 @@ export default function StudentDashboard() {
                     <Progress value={profileCompletion()} className="h-3" />
                   </div>
 
-                  {/* Avatar + Form */}
-                  <div className="flex flex-col md:flex-row items-center gap-8">
-                    <div className="relative">
-                      <Avatar className="w-32 h-32 border-4 border-accent/30 shadow-xl">
-                        <AvatarImage src={user?.profile_picture || "/default-avatar.png"} alt="Profile" />
-                        <AvatarFallback className="text-4xl bg-accent/20">
-                          {user?.first_name?.[0]}{user?.last_name?.[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <label className="absolute bottom-0 right-0 bg-accent text-accent-foreground p-2 rounded-full cursor-pointer hover:bg-accent/90 transition-colors shadow-lg">
-                        <Edit className="w-5 h-5" />
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              setProfileForm({ ...profileForm, profile_picture: e.target.files[0] });
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
+                  <div className="w-full">
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-8 md:gap-12">
+                      <div className="relative mx-auto md:mx-0">
+                        <div className="relative">
+                          <Avatar className="w-32 h-32 border-4 border-accent/30 shadow-xl">
+                            <AvatarImage 
+                              src={previewUrl || "/default-avatar.png"} 
+                              alt="Profile" 
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="text-4xl bg-accent/20">
+                              {user?.first_name?.[0]}{user?.last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
 
-                    <div className="flex-1 space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <Label>First Name</Label>
-                          <Input value={user?.first_name || ""} disabled className="bg-secondary/50 mt-1" />
+                          <label className="absolute bottom-0 right-0 bg-accent text-accent-foreground p-2 rounded-full cursor-pointer hover:bg-accent/90 transition-colors shadow-lg">
+                            <Edit className="w-5 h-5" />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleFileChange}
+                            />
+                          </label>
                         </div>
-                        <div>
-                          <Label>Last Name</Label>
-                          <Input value={user?.last_name || ""} disabled className="bg-secondary/50 mt-1" />
-                        </div>
-                        <div>
-                          <Label>Email</Label>
-                          <Input value={user?.email || ""} disabled className="bg-secondary/50 mt-1" />
-                        </div>
-                        <div>
-                          <Label>Phone</Label>
-                          <Input
-                            value={profileForm.phone}
-                            onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label>University / Institution</Label>
-                          <Input
-                            value={profileForm.university}
-                            onChange={e => setProfileForm({ ...profileForm, university: e.target.value })}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label>Course</Label>
-                          <Input
-                            value={profileForm.course}
-                            onChange={e => setProfileForm({ ...profileForm, course: e.target.value })}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label>Level / Year</Label>
-                          <Input
-                            value={profileForm.year || ""}
-                            onChange={e => setProfileForm({ ...profileForm, year: e.target.value })}
-                            className="mt-1"
-                            placeholder="e.g. Level 300 / 3rd Year"
-                          />
-                        </div>
+
+                        {profileForm.profile_picture && (
+                          <p className="text-xs text-muted-foreground mt-2 text-center">
+                            Selected: {profileForm.profile_picture.name}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Date of Birth */}
-                      <div>
-                        <Label>Date of Birth</Label>
-                        <div className="relative mt-1">
-                          <DatePicker
-                            selected={profileForm.date_of_birth}
-                            onChange={(date: Date | null) => setProfileForm({ ...profileForm, date_of_birth: date })}
-                            dateFormat="yyyy-MM-dd"
-                            maxDate={new Date(new Date().setFullYear(new Date().getFullYear() - 15))}
-                            showYearDropdown
-                            scrollableYearDropdown
-                            yearDropdownItemNumber={100}
-                            placeholderText="Select your date of birth"
-                            className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                            calendarClassName="bg-card border border-border shadow-lg rounded-md"
+                      <div className="w-full space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <Label>First Name</Label>
+                            <Input value={user?.first_name || ""} disabled className="bg-secondary/50 mt-1" />
+                          </div>
+                          <div>
+                            <Label>Last Name</Label>
+                            <Input value={user?.last_name || ""} disabled className="bg-secondary/50 mt-1" />
+                          </div>
+                          <div>
+                            <Label>Email</Label>
+                            <Input value={user?.email || ""} disabled className="bg-secondary/50 mt-1" />
+                          </div>
+                          <div>
+                            <Label>Phone</Label>
+                            <Input
+                              value={profileForm.phone}
+                              onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>University / Institution</Label>
+                            <Input
+                              value={profileForm.university}
+                              onChange={e => setProfileForm({ ...profileForm, university: e.target.value })}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>Course</Label>
+                            <Input
+                              value={profileForm.course}
+                              onChange={e => setProfileForm({ ...profileForm, course: e.target.value })}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>Level / Year</Label>
+                            <Input
+                              value={profileForm.year || ""}
+                              onChange={e => setProfileForm({ ...profileForm, year: e.target.value })}
+                              className="mt-1"
+                              placeholder="e.g. Level 300 / 3rd Year"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label>Date of Birth</Label>
+                          <div className="relative mt-1">
+                            <DatePicker
+                              selected={profileForm.date_of_birth}
+                              onChange={(date: Date | null) => setProfileForm({ ...profileForm, date_of_birth: date })}
+                              dateFormat="yyyy-MM-dd"
+                              maxDate={new Date(new Date().setFullYear(new Date().getFullYear() - 15))}
+                              showYearDropdown
+                              scrollableYearDropdown
+                              yearDropdownItemNumber={100}
+                              placeholderText="Select your date of birth"
+                              className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              calendarClassName="bg-card border border-border shadow-lg rounded-md"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label>Bio / About Me</Label>
+                          <Textarea
+                            value={profileForm.bio}
+                            onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })}
+                            rows={4}
+                            className="mt-1"
+                            placeholder="Tell us a bit about yourself, your interests, and career goals..."
                           />
                         </div>
-                      </div>
 
-                      <div>
-                        <Label>Bio / About Me</Label>
-                        <Textarea
-                          value={profileForm.bio}
-                          onChange={e => setProfileForm({ ...profileForm, bio: e.target.value })}
-                          rows={4}
-                          className="mt-1"
-                          placeholder="Tell us a bit about yourself, your interests, and career goals..."
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                           <Label>LinkedIn</Label>
                           <Input
@@ -407,30 +437,20 @@ export default function StudentDashboard() {
                             className="mt-1"
                           />
                         </div>
-                        <div>
-                          <Label>GitHub</Label>
-                          <Input
-                            value={profileForm.github}
-                            onChange={e => setProfileForm({ ...profileForm, github: e.target.value })}
-                            placeholder="https://github.com/yourusername"
-                            className="mt-1"
-                          />
-                        </div>
-                      </div>
 
-                      <Button
-                        variant="accent"
-                        size="lg"
-                        className="w-full md:w-auto"
-                        onClick={handleProfileUpdate}
-                      >
-                        Save Profile Changes
-                      </Button>
+                        <Button
+                          variant="accent"
+                          size="lg"
+                          className="w-full md:w-auto"
+                          onClick={handleProfileUpdate}
+                        >
+                          Save Profile Changes
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Change Password */}
-                  <div className="border-t pt-8">
+                  {/* <div className="border-t pt-8">
                     <h3 className="text-xl font-semibold mb-6">Change Password</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
@@ -447,12 +467,12 @@ export default function StudentDashboard() {
                       </div>
                     </div>
                     <Button className="mt-6" variant="outline">Update Password</Button>
-                  </div>
+                  </div> */}
                 </CardContent>
               </Card>
             </TabsContent>
 
-            {/* INTERNSHIPS TAB */}
+            {/* Internships Tab */}
             <TabsContent value="internships">
               <Card className="bg-card/80 backdrop-blur-sm border-accent/20">
                 <CardHeader>
@@ -494,17 +514,11 @@ export default function StudentDashboard() {
                                   {app.company?.name || "Company Name"}
                                 </div>
                               </TableCell>
-                              <TableCell>{new Date(app.created_at).toLocaleDateString()}</TableCell>
+                              <TableCell>{formatDate(app.applied_at)}</TableCell>
                               <TableCell>
-                                <Badge
-                                  variant={
-                                    app.status === "approved" || app.status === "paid" ? "default" :
-                                    app.status === "pending" ? "secondary" :
-                                    "destructive"
-                                  }
-                                >
-                                  {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                                </Badge>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusClass(app.status)}`}>
+                                  {app.status?.charAt(0).toUpperCase() + app.status?.slice(1) || "Unknown"}
+                                </span>
                               </TableCell>
                               <TableCell>
                                 {app.status === "paid" ? (
@@ -535,7 +549,7 @@ export default function StudentDashboard() {
               </Card>
             </TabsContent>
 
-            {/* MENTORSHIP TAB */}
+            {/* Mentorship Tab */}
             <TabsContent value="mentorship">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="bg-card/80 backdrop-blur-sm border-accent/20">
@@ -562,7 +576,11 @@ export default function StudentDashboard() {
                             <div className="flex items-start justify-between">
                               <div className="flex items-center gap-4">
                                 {session.mentor?.image ? (
-                                  <img src={`/${session.mentor.image}`} alt="" className="w-14 h-14 rounded-full object-cover" />
+                                  <img
+                                    src={session.mentor.image}
+                                    alt="Mentor"
+                                    className="w-14 h-14 rounded-full object-cover"
+                                  />
                                 ) : (
                                   <div className="w-14 h-14 rounded-full bg-accent/20 flex items-center justify-center text-2xl">
                                     👤

@@ -313,7 +313,7 @@ const ForgotPassword = () => {
               </motion.form>
             )}
           </AnimatePresence>
-        </div>
+        </div> 
       </motion.div>
     </div>
   );

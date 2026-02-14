@@ -158,12 +158,14 @@ class BookingController extends Controller
             'payment_reference' => $reference,
             'amount'            => $amountInPesewas,
             'currency'          => 'GHS',
-            'expires_at'        => now()->addHours(24),
+            // 'expires_at'        => now()->addHours(24),
+            'expires_at'        => now()->addMinutes(5),
         ]);
 
         Mail::to($booking->student_email)->send(new PaymentLinkMail($booking, $data['authorization_url']));
 
-        ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
+        // ExpireBookingJob::dispatch($booking->id)->delay(now()->addHours(24));
+        ExpireBookingJob::dispatch($booking->id)->delay(now()->addMinutes(15));
 
         return response()->json([
             'message'     => 'Application approved. Payment link for GHS 2.00 sent to student.',
@@ -273,7 +275,7 @@ class BookingController extends Controller
                 return [
                     'id' => $booking->id,
                     'company' => $booking->company,
-                    'applied_at' => $booking->created_at,
+                    'applied_at'  => $booking->created_at->toISOString(),
                     'status' => $booking->status,
                     'payment_status' => $booking->status === 'paid' ? 'Paid' : 'Not Paid',
                     'cv_path' => $booking->cv_path ? asset('storage/' . $booking->cv_path) : null,
