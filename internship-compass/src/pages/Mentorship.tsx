@@ -20,7 +20,7 @@ import {
   LogIn,
   ChevronLeft,
   ChevronRight,
-  X,
+  Check,
 } from "lucide-react";
 import {
   Dialog,
@@ -28,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,52 +73,32 @@ const itemVariants = {
   },
 };
 
-const MentorSkeleton = () => (
-  <motion.div
-    variants={itemVariants}
-    whileHover={{ y: -10, scale: 1.02 }}
-    className="group"
-  >
-    <div className="bg-card rounded-3xl overflow-hidden shadow-elegant hover:shadow-elevated transition-all duration-500 border border-border/50">
-      <div className="relative h-56 bg-gradient-to-br from-primary via-primary/90 to-primary/70 flex items-center justify-center overflow-hidden">
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-r from-accent/0 via-accent/30 to-accent/0"
-          initial={{ x: "-100%" }}
-          whileHover={{ x: "100%" }}
-          transition={{ duration: 0.8 }}
-        />
-        <motion.span
-          className="text-8xl relative z-10"
-          animate={{ rotate: [0, -10, 10, -10, 10, 0] }}
-          transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 2 }}
-          whileHover={{ scale: 1.2, rotate: [0, -15, 15, -15, 15, 0], transition: { duration: 0.6 } }}
-        >
-          👤
-        </motion.span>
-        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-background/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
-          <Star className="w-4 h-4 text-accent fill-accent" />
-          <span className="text-sm font-bold text-foreground">—.—</span>
-        </div>
-      </div>
-      <div className="p-6">
-        <div className="h-6 bg-secondary rounded w-3/4 mb-2"></div>
-        <div className="h-4 bg-secondary/60 rounded w-1/2 mb-4"></div>
-        <div className="flex gap-3 mb-6">
-          <div className="h-8 bg-secondary/40 rounded-full w-32"></div>
-          <div className="h-8 bg-secondary/40 rounded-full w-24"></div>
-        </div>
-        <div className="space-y-2 mb-6">
-          <div className="h-4 bg-secondary/30 rounded w-full"></div>
-          <div className="h-4 bg-secondary/30 rounded w-4/5"></div>
-        </div>
-        <div className="flex gap-3">
-          <div className="h-12 bg-secondary/40 rounded-xl flex-1"></div>
-          <div className="h-12 w-12 bg-secondary/40 rounded-xl"></div>
-        </div>
-      </div>
-    </div>
-  </motion.div>
-);
+const subscriptionPlans = [
+  {
+    id: "1-month",
+    name: "1 Month Plan",
+    duration: "30 days",
+    sessions: 4,
+    price: 180,
+    popular: false,
+  },
+  {
+    id: "2-month",
+    name: "2 Months Plan",
+    duration: "60 days",
+    sessions: 8,
+    price: 320,
+    popular: true,
+  },
+  {
+    id: "3-month",
+    name: "3 Months Plan",
+    duration: "90 days",
+    sessions: 12,
+    price: 450,
+    popular: false,
+  },
+];
 
 const Mentorship = () => {
   const navigate = useNavigate();
@@ -132,9 +111,13 @@ const Mentorship = () => {
   const [itemsToShow, setItemsToShow] = useState(1);
 
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [bioOpen, setBioOpen] = useState(false);
+
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [selectedBioMentor, setSelectedBioMentor] = useState<Mentor | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<typeof subscriptionPlans[0] | null>(null);
+
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
 
@@ -153,7 +136,6 @@ const Mentorship = () => {
     scheduled_at: "",
   });
 
-  // Responsive carousel items
   useEffect(() => {
     const updateItemsToShow = () => {
       const width = window.innerWidth;
@@ -168,7 +150,6 @@ const Mentorship = () => {
     return () => window.removeEventListener("resize", updateItemsToShow);
   }, []);
 
-  // Fetch current user
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -183,7 +164,6 @@ const Mentorship = () => {
     fetchUser();
   }, []);
 
-  // Fetch mentors
   useEffect(() => {
     const fetchMentors = async () => {
       try {
@@ -204,17 +184,23 @@ const Mentorship = () => {
   const canGoPrev = currentIndex > 0;
 
   const nextSlide = () => {
-    if (canGoNext) setCurrentIndex(prev => prev + 1);
+    if (canGoNext) setCurrentIndex((prev) => prev + 1);
   };
 
   const prevSlide = () => {
-    if (canGoPrev) setCurrentIndex(prev => prev - 1);
+    if (canGoPrev) setCurrentIndex((prev) => prev - 1);
   };
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     const threshold = 50;
     if (info.offset.x < -threshold && canGoNext) nextSlide();
     else if (info.offset.x > threshold && canGoPrev) prevSlide();
+  };
+
+  const openSubscriptionDialog = (mentor: Mentor) => {
+    setSelectedMentor(mentor);
+    setSelectedPlan(null);
+    setSubscriptionOpen(true);
   };
 
   const openBookingDialog = (mentor: Mentor) => {
@@ -241,6 +227,26 @@ const Mentorship = () => {
   const openBioDialog = (mentor: Mentor) => {
     setSelectedBioMentor(mentor);
     setBioOpen(true);
+  };
+
+  const handleSelectPlan = (plan: typeof subscriptionPlans[0]) => {
+    setSelectedPlan(plan);
+    toast.info(`Selected ${plan.name} – Initiating payment...`);
+    // Replace this with your real Paystack initiation logic
+    // Example:
+    // api.post("/api/mentor/subscribe/initiate", {
+    //   mentor_id: selectedMentor?.id,
+    //   plan_id: plan.id,
+    // })
+    //   .then((res) => {
+    //     if (res.data.success) {
+    //       window.location.href = res.data.authorization_url;
+    //     }
+    //   })
+    //   .catch((err) => {
+    //     toast.error("Failed to start subscription process");
+    //     console.error(err);
+    //   });
   };
 
   const handleSubmitBooking = async () => {
@@ -297,7 +303,7 @@ const Mentorship = () => {
     const parts = [
       mentor.user?.first_name || "",
       mentor.user?.middle_name || "",
-      mentor.user?.last_name || ""
+      mentor.user?.last_name || "",
     ].filter(Boolean);
     return parts.length > 0 ? parts.join(" ") : "Mentor Name";
   };
@@ -607,28 +613,23 @@ const Mentorship = () => {
                                   )}
                                 </div>
 
-                                <div className="mb-4 text-center">
-                                  <p className="text-sm text-muted-foreground">Session Fee</p>
-                                  <p className="text-3xl font-bold text-accent">
+                                <div className="mb-6 text-center">
+                                  {/* <p className="text-sm text-muted-foreground mb-2">Starting from</p>
+                                  <p className="text-3xl font-bold text-accent mb-5">
                                     GHS {(Number(mentor.session_price) || 0).toFixed(2)}
-                                  </p>
-                                </div>
+                                  </p> */}
 
-                                <div className="flex gap-3">
                                   <Button
                                     variant="accent"
-                                    size="default"
-                                    className="flex-1 rounded-xl"
+                                    size="lg"
+                                    className="w-full rounded-xl text-lg py-6"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      openBookingDialog(mentor);
+                                      openSubscriptionDialog(mentor);
                                     }}
                                   >
-                                    <Calendar className="w-4 h-4 mr-2" />
-                                    Book Session
-                                  </Button>
-                                  <Button variant="outline" size="icon" className="rounded-xl">
-                                    <MessageCircle className="w-4 h-4" />
+                                    <Calendar className="w-5 h-5 mr-2" />
+                                    Subscribe
                                   </Button>
                                 </div>
                               </div>
@@ -681,12 +682,42 @@ const Mentorship = () => {
                 className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
               >
                 {[
-                  { icon: Target, title: "Career Planning", description: "Personalized roadmap to help you identify and achieve your career goals.", color: "text-accent" },
-                  { icon: "📝", title: "Resume & Portfolio", description: "Expert feedback to make your resume stand out to top employers.", isEmoji: true },
-                  { icon: MessageCircle, title: "Interview Mastery", description: "Mock interviews and coaching to boost your confidence.", color: "text-primary" },
-                  { icon: Lightbulb, title: "Industry Insights", description: "Deep knowledge of trends and what employers are looking for.", color: "text-accent" },
-                  { icon: Users, title: "Networking Strategy", description: "Build meaningful professional connections that last.", color: "text-primary" },
-                  { icon: Rocket, title: "Career Acceleration", description: "Fast-track your growth with proven strategies.", color: "text-accent" },
+                  {
+                    icon: Target,
+                    title: "Career Planning",
+                    description: "Personalized roadmap to help you identify and achieve your career goals.",
+                    color: "text-accent",
+                  },
+                  {
+                    icon: "📝",
+                    title: "Resume & Portfolio",
+                    description: "Expert feedback to make your resume stand out to top employers.",
+                    isEmoji: true,
+                  },
+                  {
+                    icon: MessageCircle,
+                    title: "Interview Mastery",
+                    description: "Mock interviews and coaching to boost your confidence.",
+                    color: "text-primary",
+                  },
+                  {
+                    icon: Lightbulb,
+                    title: "Industry Insights",
+                    description: "Deep knowledge of trends and what employers are looking for.",
+                    color: "text-accent",
+                  },
+                  {
+                    icon: Users,
+                    title: "Networking Strategy",
+                    description: "Build meaningful professional connections that last.",
+                    color: "text-primary",
+                  },
+                  {
+                    icon: Rocket,
+                    title: "Career Acceleration",
+                    description: "Fast-track your growth with proven strategies.",
+                    color: "text-accent",
+                  },
                 ].map((service, index) => (
                   <motion.div
                     key={index}
@@ -702,7 +733,9 @@ const Mentorship = () => {
                       {service.isEmoji ? (
                         <span className="text-5xl block">{service.icon}</span>
                       ) : (
-                        <div className={`w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center ${service.color}`}>
+                        <div
+                          className={`w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center ${service.color}`}
+                        >
                           <service.icon className="w-7 h-7" />
                         </div>
                       )}
@@ -735,11 +768,11 @@ const Mentorship = () => {
                   Ready to Accelerate Your <span className="text-accent">Career?</span>
                 </h2>
                 <p className="text-xl text-primary-foreground/80 mb-10">
-                  Book your first mentorship session today and take the first step towards your dream career.
+                  Subscribe today and start your mentorship journey.
                 </p>
                 <Button variant="hero" size="xl" className="animate-pulse-glow">
                   <Calendar className="w-5 h-5 mr-2" />
-                  Schedule Free Consultation
+                  Get Started
                 </Button>
               </motion.div>
             </div>
@@ -747,11 +780,76 @@ const Mentorship = () => {
         </>
       )}
 
-      {/* Booking Dialog */}
+      {/* Subscription Plans Dialog */}
+      <Dialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Choose Your Mentorship Plan</DialogTitle>
+            <DialogDescription>
+              Subscribe to {selectedMentor ? getFullName(selectedMentor) : "the mentor"} — get more sessions at better value.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid md:grid-cols-3 gap-6 py-8">
+            {subscriptionPlans.map((plan) => (
+              <div
+                key={plan.id}
+                className={`
+                  relative rounded-2xl border-2 p-6 flex flex-col transition-all duration-300
+                  ${plan.popular ? "border-accent scale-105 shadow-xl bg-accent/5" : "border-border hover:border-accent/50"}
+                `}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-accent text-accent-foreground text-sm font-semibold rounded-full">
+                    Most Popular
+                  </div>
+                )}
+
+                <h3 className="text-xl font-bold mb-2 text-center">{plan.name}</h3>
+
+                <div className="text-center mb-6">
+                  <span className="text-4xl font-extrabold text-accent">GHS {plan.price}</span>
+                  <span className="text-sm text-muted-foreground block">total</span>
+                </div>
+
+                <div className="space-y-4 mb-8 flex-1">
+                  <div className="flex items-center gap-3">
+                    <Check className="h-5 w-5 text-accent" />
+                    <span>{plan.sessions} one-on-one sessions</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Check className="h-5 w-5 text-accent" />
+                    <span>Valid for {plan.duration}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Check className="h-5 w-5 text-accent" />
+                    <span>Priority scheduling</span>
+                  </div>
+                </div>
+
+                <Button
+                  variant={plan.popular ? "accent" : "outline"}
+                  size="lg"
+                  className="w-full"
+                  onClick={() => handleSelectPlan(plan)}
+                >
+                  Choose {plan.name}
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center text-sm text-muted-foreground mt-4">
+            All plans are 1-on-1 • Sessions valid until plan expiry
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Booking Dialog - single session (kept but not linked from main cards) */}
       <Dialog open={bookingOpen} onOpenChange={setBookingOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Book Session with {selectedMentor ? getFullName(selectedMentor) : "Mentor"}</DialogTitle>
+            <DialogTitle>Book Single Session with {selectedMentor ? getFullName(selectedMentor) : "Mentor"}</DialogTitle>
             <DialogDescription>
               Session fee: <strong>GHS {(Number(selectedMentor?.session_price) || 0).toFixed(2)}</strong>
             </DialogDescription>
@@ -910,15 +1008,15 @@ const Mentorship = () => {
                             size="sm"
                             className={`
                               transition-all duration-200
-                              ${isSelected 
-                                ? "bg-accent text-base shadow-md" 
+                              ${isSelected
+                                ? "bg-accent text-base shadow-md"
                                 : "hover:bg-accent/30 hover:border-accent/50 border-foreground/50"}
                               rounded-lg py-5 text-base font-medium
                             `}
-                            onClick={() => 
-                              setFormData({ 
-                                ...formData, 
-                                scheduled_at: `${selectedDate.toISOString().split("T")[0]}T${time}` 
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                scheduled_at: `${selectedDate.toISOString().split("T")[0]}T${time}`,
                               })
                             }
                           >
@@ -959,7 +1057,6 @@ const Mentorship = () => {
             <DialogTitle className="pr-10 text-2xl">
               {selectedBioMentor ? getFullName(selectedBioMentor) : "Mentor"} - Full Bio
             </DialogTitle>
-           
           </DialogHeader>
           <div className="mt-2 text-muted-foreground leading-relaxed whitespace-pre-wrap text-base">
             {selectedBioMentor?.bio || "No detailed bio available for this mentor."}
